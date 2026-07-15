@@ -89,6 +89,37 @@ model User {
   contactMessages ContactMessage[]
 }
 
+model Look {
+  id        String        @id @default(cuid())
+  slug      String        @unique
+  title     String
+  subtitle  String?
+  image     String
+  active    Boolean       @default(true)
+  order     Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  hotspots  LookHotspot[]
+
+  @@index([active, order])
+}
+
+model LookHotspot {
+  id           String  @id @default(cuid())
+  lookId       String
+  look         Look    @relation(fields: [lookId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  xPercent     Float
+  yPercent     Float
+  defaultColor String?
+  defaultSize  String?
+  label        String?
+  createdAt    DateTime @default(now())
+
+  @@index([lookId])
+}
+
 model Session {
   id        String   @id @default(cuid())
   userId    String
@@ -157,7 +188,8 @@ model Product {
   sizes          String[] @default([])
   variantStock   Json?    // VariantStockEntry[]
   regionalPrices Json?    // Partial<Record<Currency, {price, compareAtPrice}>>
-
+  lookHotspots   LookHotspot[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

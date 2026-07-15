@@ -57,3 +57,25 @@ export interface CartItem {
   color?: string;
   size?: string;
 }
+
+export interface LookHotspot {
+  id: string;
+  productId: string;
+  xPercent: number;
+  yPercent: number;
+  defaultColor?: string;
+  defaultSize?: string;
+  label?: string;
+  product: Product;
+}
+
+export interface Look {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle?: string;
+  image: string;
+  active: boolean;
+  order: number;
+  hotspots: LookHotspot[];
+}

@@ -1,15 +1,61 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
 import { Loader2, Search, X } from "lucide-react";
 import { fetchProducts } from "@/src/lib/products";
+import { buildSearchIndex, searchProducts, type SearchResult } from "@/src/lib/search";
 import { Product } from "@/src/types";
-import { formatPrice } from "@/src/lib/utils";
+import { formatPrice, cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+function AttributeBadges({ result }: { result: SearchResult }) {
+  if (result.matchedColors.length === 0 && result.matchedSizes.length === 0) return null;
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      {result.matchedColors.map((c) => {
+        const soldOut = c.stock === 0;
+        return (
+          <span
+            key={c.name}
+            className={cn(
+              "flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-mono text-[10px]",
+              soldOut ? "border-white/5 text-muted/50 line-through" : "border-white/10 text-muted"
+            )}
+          >
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/20"
+              style={{ backgroundColor: c.hex }}
+            />
+            {c.name}
+            {!soldOut && c.stock !== undefined && c.stock <= 5 && (
+              <span className="text-accent">· {c.stock} left</span>
+            )}
+          </span>
+        );
+      })}
+      {result.matchedSizes.map((s) => {
+        const soldOut = s.stock === 0;
+        return (
+          <span
+            key={s.size}
+            className={cn(
+              "rounded-full border px-1.5 py-0.5 font-mono text-[10px]",
+              soldOut ? "border-white/5 text-muted/50 line-through" : "border-white/10 text-muted"
+            )}
+          >
+            Size {s.size}
+            {!soldOut && s.stock !== undefined && s.stock <= 5 && <span className="text-accent"> · {s.stock} left</span>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function SearchOverlay({
   open,
@@ -29,9 +75,6 @@ export default function SearchOverlay({
       setQuery("");
       const t = setTimeout(() => inputRef.current?.focus(), 100);
 
-      // Fetch once, the first time the overlay is actually opened — no
-      // point loading the whole catalog on every page load just in case
-      // someone searches.
       if (!loaded) {
         setLoading(true);
         fetchProducts()
@@ -64,17 +107,13 @@ export default function SearchOverlay({
     };
   }, [open]);
 
-  const q = query.trim().toLowerCase();
-  const results =
-    q.length === 0
-      ? []
-      : products
-          .filter(
-            (p) =>
-              p.name.toLowerCase().includes(q) ||
-              p.categorySlug.toLowerCase().includes(q)
-          )
-          .slice(0, 8);
+  const searchIndex = useMemo(() => buildSearchIndex(products), [products]);
+
+  const q = query.trim();
+  const results = useMemo(() => {
+    if (q.length === 0) return [];
+    return searchProducts(q, products, searchIndex);
+  }, [q, products, searchIndex]);
 
   return (
     <AnimatePresence>
@@ -101,7 +140,7 @@ export default function SearchOverlay({
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search products, categories…"
+                placeholder="Search products, categories, colors, sizes…"
                 className="w-full bg-transparent font-body text-base text-ink placeholder:text-muted focus:outline-none"
               />
               {loading && <Loader2 size={16} className="shrink-0 animate-spin text-muted" />}
@@ -125,19 +164,20 @@ export default function SearchOverlay({
                     No results for &ldquo;{query}&rdquo;.
                   </p>
                 ) : (
-                  results.map((p) => (
+                  results.map((r) => (
                     <Link
-                      key={p.id}
-                      href={`/product/${p.slug}`}
+                      key={r.product.id}
+                      href={`/product/${r.product.slug}`}
                       onClick={onClose}
                       className="flex items-center gap-4 border-b border-white/5 px-5 py-3 transition-colors last:border-0 hover:bg-surface2"
                     >
                       <div className="relative h-14 w-12 shrink-0 overflow-hidden rounded-lg bg-surface2">
-                        <Image src={p.image} alt={p.name} fill sizes="48px" className="object-cover" />
+                        <Image src={r.product.image} alt={r.product.name} fill sizes="48px" className="object-cover" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-body text-sm text-ink">{p.name}</p>
-                        <p className="font-mono text-xs text-muted">{formatPrice(p.price)}</p>
+                        <p className="truncate font-body text-sm text-ink">{r.product.name}</p>
+                        <p className="font-mono text-xs text-muted">{formatPrice(r.product.price)}</p>
+                        <AttributeBadges result={r} />
                       </div>
                     </Link>
                   ))

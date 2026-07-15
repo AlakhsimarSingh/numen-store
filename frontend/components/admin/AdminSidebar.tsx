@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, ShoppingBag, LayoutGrid, Package, Star, Tag, Settings, Menu, X, ArrowLeft,
-  Ruler, Wallet, Zap, LogOut, ShieldCheck, Mail,
+  Ruler, Wallet, Zap, LogOut, ShieldCheck, Mail, Shirt,
 } from "lucide-react";
 import { useAuthStore } from "@/src/hooks/useAuthStore";
 import { cn } from "@/src/lib/utils";
@@ -35,6 +35,7 @@ const navGroups: NavGroup[] = [
       { label: "Products", href: "/admin/products", icon: ShoppingBag },
       { label: "Categories", href: "/admin/categories", icon: LayoutGrid },
       { label: "Size Charts", href: "/admin/size-charts", icon: Ruler },
+      { label: "Shop the Look", href: "/admin/looks", icon: Shirt },
     ],
   },
   {
@@ -59,9 +60,26 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+// Thumb-reachable shortcuts for the mobile bottom bar — the rest live behind "More".
+const BOTTOM_TABS: NavItem[] = [
+  { label: "Home", href: "/admin", icon: LayoutDashboard },
+  { label: "Products", href: "/admin/products", icon: ShoppingBag },
+  { label: "Orders", href: "/admin/orders", icon: Package },
+  { label: "Settings", href: "/admin/settings", icon: Settings },
+];
+
 function isActivePath(pathname: string | null, href: string) {
   if (href === "/admin") return pathname === "/admin";
   return pathname?.startsWith(href) ?? false;
+}
+
+function getPageTitle(pathname: string | null): string {
+  for (const group of navGroups) {
+    for (const item of group.items) {
+      if (isActivePath(pathname, item.href)) return item.label;
+    }
+  }
+  return "Admin";
 }
 
 function NavLink({
@@ -81,7 +99,7 @@ function NavLink({
       href={item.href}
       onClick={onClick}
       className={cn(
-        "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 font-body text-sm transition-colors",
+        "group relative flex items-center gap-3 rounded-xl px-3.5 py-3 font-body text-sm transition-colors",
         active ? "text-accent" : "text-muted hover:text-ink"
       )}
     >
@@ -148,6 +166,9 @@ export default function AdminSidebar() {
     setOpen(false);
   }, [pathname]);
 
+  const pageTitle = getPageTitle(pathname);
+  const isBottomTabActive = BOTTOM_TABS.some((t) => isActivePath(pathname, t.href));
+
   return (
     <>
       {/* Desktop sidebar */}
@@ -182,22 +203,68 @@ export default function AdminSidebar() {
         <AccountFooter />
       </aside>
 
-      {/* Mobile top bar */}
-      <div className="fixed inset-x-0 top-0 z-40 flex h-16 items-center justify-between border-b border-white/5 bg-surface/95 px-4 backdrop-blur-sm lg:hidden">
-        <Link href="/admin" className="font-display text-lg font-bold text-ink">
-          NUMEN<span className="text-accent">.</span>{" "}
-          <span className="font-mono text-[9px] uppercase text-muted">Admin</span>
-        </Link>
+      {/* Mobile top bar — shows current section instead of a static logo */}
+      <div className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-white/5 bg-surface/95 px-4 backdrop-blur-sm lg:hidden">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="shrink-0 font-display text-base font-bold text-accent">•</span>
+          <p className="truncate font-display text-base font-bold text-ink">{pageTitle}</p>
+        </div>
         <button
           onClick={() => setOpen(true)}
           aria-label="Open menu"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-ink/80 transition-colors hover:bg-surface2"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink/80 transition-colors hover:bg-surface2 active:scale-95"
         >
           <Menu size={20} />
         </button>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile bottom tab bar — thumb-reachable shortcuts to the most-used sections */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-white/5 bg-surface/95 backdrop-blur-sm lg:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        {BOTTOM_TABS.map((tab) => {
+          const active = isActivePath(pathname, tab.href);
+          const Icon = tab.icon;
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className="relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 active:opacity-70"
+            >
+              {active && (
+                <motion.span
+                  layoutId="admin-bottom-tab-active"
+                  className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-accent"
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                />
+              )}
+              <Icon size={19} strokeWidth={active ? 2.1 : 1.75} className={active ? "text-accent" : "text-muted"} />
+              <span className={cn("font-mono text-[9px] uppercase tracking-wide", active ? "text-accent" : "text-muted")}>
+                {tab.label}
+              </span>
+            </Link>
+          );
+        })}
+        <button
+          onClick={() => setOpen(true)}
+          className="relative flex flex-1 flex-col items-center justify-center gap-1 py-2.5 active:opacity-70"
+        >
+          {!isBottomTabActive && (
+            <motion.span
+              layoutId="admin-bottom-tab-active"
+              className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-accent"
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+            />
+          )}
+          <Menu size={19} strokeWidth={!isBottomTabActive ? 2.1 : 1.75} className={!isBottomTabActive ? "text-accent" : "text-muted"} />
+          <span className={cn("font-mono text-[9px] uppercase tracking-wide", !isBottomTabActive ? "text-accent" : "text-muted")}>
+            More
+          </span>
+        </button>
+      </nav>
+
+      {/* Mobile drawer — everything else, reached via "More" or the top-bar menu icon */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -221,7 +288,7 @@ export default function AdminSidebar() {
                 <button
                   onClick={() => setOpen(false)}
                   aria-label="Close menu"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface2 hover:text-ink"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface2 hover:text-ink active:scale-95"
                 >
                   <X size={18} />
                 </button>

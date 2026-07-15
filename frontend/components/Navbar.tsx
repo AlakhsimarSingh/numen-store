@@ -4,10 +4,11 @@ import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Search, User } from "lucide-react";
+import { X, Search, User } from "lucide-react";
 import CategoryMegaMenu from "@/components/CategoryMegaMenu";
 import CartPreview from "@/components/CartPreview";
 import SearchOverlay from "@/components/SearchOverlay";
+import MobileNavOverlay from "@/components/MobileNavOverlay";
 import { useAuthStore } from "@/src/hooks/useAuthStore";
 import { cn } from "@/src/lib/utils";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
@@ -18,6 +19,7 @@ const navLinks = [
   { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
   { label: "New Drops", href: "/shop?filter=new" },
+  { label: "Shop the Look", href: "/shop-the-look" },
   { label: "About", href: "/about" },
   { label: "Contact Us", href: "/contact" },
 ];
@@ -42,7 +44,7 @@ export default function Navbar() {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-    useEffect(() => {
+  useEffect(() => {
     loadRates();
   }, [loadRates]);
   useEffect(() => {
@@ -97,7 +99,9 @@ export default function Navbar() {
           </nav>
 
           <div className="flex items-center gap-5">
-            <CurrencySwitcher />
+            <div className="hidden md:block">
+              <CurrencySwitcher />
+            </div>
             <button
               onClick={() => setSearchOpen(true)}
               aria-label="Search"
@@ -159,85 +163,33 @@ export default function Navbar() {
             )}
 
             <CartPreview />
+
             <button
-              aria-label="Menu"
-              onClick={() => setOpen(!open)}
-              className="text-ink/80 md:hidden"
+              aria-label={open ? "Close menu" : "Open menu"}
+              onClick={() => setOpen((v) => !v)}
+              className="relative flex h-6 w-6 flex-col items-center justify-center gap-[5px] md:hidden"
             >
-              {open ? <X size={22} /> : <Menu size={22} />}
+              <motion.span
+                animate={open ? { rotate: 45, y: 6.5 } : { rotate: 0, y: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="h-[1.5px] w-5 bg-ink/80"
+              />
+              <motion.span
+                animate={open ? { opacity: 0 } : { opacity: 1 }}
+                transition={{ duration: 0.15 }}
+                className="h-[1.5px] w-5 bg-ink/80"
+              />
+              <motion.span
+                animate={open ? { rotate: -45, y: -6.5 } : { rotate: 0, y: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="h-[1.5px] w-5 bg-ink/80"
+              />
             </button>
           </div>
         </div>
-
-        <motion.nav
-          initial={false}
-          animate={{ height: open ? "auto" : 0, opacity: open ? 1 : 0 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className={cn(
-            "overflow-hidden border-t md:hidden",
-            scrolled ? "border-white/5 bg-bg/80" : "border-white/5 bg-bg/95"
-          )}
-        >
-          <div className="flex flex-col gap-4 px-6 py-4">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setOpen(false)}
-                className="font-body text-sm text-muted hover:text-ink"
-              >
-                {link.label}
-              </Link>
-            ))}
-            <Link
-              href="/categories"
-              onClick={() => setOpen(false)}
-              className="font-body text-sm text-muted hover:text-ink"
-            >
-              Categories
-            </Link>
-
-            {isLoggedIn ? (
-              <div className="mt-2 flex gap-3 border-t border-white/5 pt-4">
-                <Link
-                  href="/account"
-                  onClick={() => setOpen(false)}
-                  className="flex-1 rounded-full border border-white/10 py-2 text-center font-body text-sm text-ink"
-                >
-                  My Account
-                </Link>
-                <button
-                  onClick={() => {
-                    logout();
-                    setOpen(false);
-                  }}
-                  className="flex-1 rounded-full bg-accent2/10 py-2 text-center font-body text-sm font-semibold text-accent2"
-                >
-                  Log out
-                </button>
-              </div>
-            ) : (
-              <div className="mt-2 flex gap-3 border-t border-white/5 pt-4">
-                <Link
-                  href="/login"
-                  onClick={() => setOpen(false)}
-                  className="flex-1 rounded-full border border-white/10 py-2 text-center font-body text-sm text-ink"
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  onClick={() => setOpen(false)}
-                  className="flex-1 rounded-full bg-accent py-2 text-center font-body text-sm font-semibold text-bg"
-                >
-                  Sign up
-                </Link>
-              </div>
-            )}
-          </div>
-        </motion.nav>
       </motion.header>
 
+      <MobileNavOverlay open={open} onClose={() => setOpen(false)} />
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </>
   );
