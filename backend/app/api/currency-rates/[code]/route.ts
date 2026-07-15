@@ -13,14 +13,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ co
   }
 
   const body = await req.json().catch(() => null);
-  const rate = Number(body?.rate);
-  if (!Number.isFinite(rate) || rate <= 0) {
-    return NextResponse.json({ error: "Rate must be a positive number." }, { status: 400 });
+  if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
+
+  const data: { rate?: number; symbol?: string } = {};
+
+  if (body.rate !== undefined) {
+    const rate = Number(body.rate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      return NextResponse.json({ error: "Rate must be a positive number." }, { status: 400 });
+    }
+    data.rate = rate;
+  }
+
+  if (body.symbol !== undefined) {
+    const symbol = String(body.symbol).trim();
+    if (!symbol || symbol.length > 6) {
+      return NextResponse.json({ error: "Symbol must be 1-6 characters." }, { status: 400 });
+    }
+    data.symbol = symbol;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   }
 
   try {
-    const updated = await prisma.currencyRate.update({ where: { code }, data: { rate } });
-    return NextResponse.json({ code: updated.code, rate: updated.rate });
+    const updated = await prisma.currencyRate.update({ where: { code }, data });
+    return NextResponse.json({ code: updated.code, rate: updated.rate, symbol: updated.symbol });
   } catch {
     return NextResponse.json({ error: "Currency not found." }, { status: 404 });
   }

@@ -12,7 +12,7 @@ import MobileNavOverlay from "@/components/MobileNavOverlay";
 import { useAuthStore } from "@/src/hooks/useAuthStore";
 import { cn } from "@/src/lib/utils";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
-import { detectCurrencyFromLocale } from "@/src/lib/currency";
+import { detectCurrencyFromIP, detectCurrencyFromLocale } from "@/src/lib/currency";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
 
 const navLinks = [
@@ -36,6 +36,7 @@ export default function Navbar() {
   const userSelected = useCurrencyStore((s) => s.userSelected);
   const setCurrency = useCurrencyStore((s) => s.setCurrency);
   const loadRates = useCurrencyStore((s) => s.loadRates);
+  const currencies = useCurrencyStore((s) => s.currencies);
   useEffect(() => {
     function handleScroll() {
       setScrolled(window.scrollY > 8);
@@ -45,13 +46,26 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
   useEffect(() => {
-    loadRates();
-  }, [loadRates]);
-  useEffect(() => {
     if (userSelected) return;
-    const detected = detectCurrencyFromLocale(navigator.language);
-    setCurrency(detected, false);
-  }, [userSelected, setCurrency]);
+    let cancelled = false;
+
+    async function detectAndSetCurrency() {
+      const ipCurrency = await detectCurrencyFromIP();
+      if (cancelled) return;
+
+      const candidate = ipCurrency ?? detectCurrencyFromLocale(navigator.language);
+      // Only apply it if we actually have a rate for it (or it's the INR base) —
+      // otherwise fall back to USD rather than showing prices in a currency
+      // the admin hasn't configured.
+      const isSupported = candidate === "INR" || currencies.some((c) => c.code === candidate);
+      setCurrency(isSupported ? candidate : "USD", false);
+    }
+
+    detectAndSetCurrency();
+    return () => {
+      cancelled = true;
+    };
+  }, [userSelected, setCurrency, currencies]);
   if (pathname?.startsWith("/admin")) return null;
 
   return (

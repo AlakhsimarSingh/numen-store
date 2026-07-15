@@ -6,18 +6,36 @@ const LOCALE_COUNTRY_MAP: Record<string, CurrencyCode> = {
   UK: "GBP",
   DE: "EUR", FR: "EUR", ES: "EUR", IT: "EUR", NL: "EUR", IE: "EUR", PT: "EUR",
   US: "USD",
+  AE: "AED",
+  CA: "CAD",
+  AU: "AUD",
+  SG: "SGD",
 };
 
 export function detectCurrencyFromLocale(locale: string): CurrencyCode {
   const parts = locale.split("-");
   const country = parts[1]?.toUpperCase();
   if (country && LOCALE_COUNTRY_MAP[country]) return LOCALE_COUNTRY_MAP[country];
-  return "USD"; // storefront default stays USD unless detected/user-picked
+  return "USD";
+}
+
+export async function detectCurrencyFromIP(): Promise<CurrencyCode | null> {
+  try {
+    const res = await fetch("https://ipwho.is/");
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.success) return null;
+    const countryCode = data.country_code as string | undefined;
+    return (countryCode && LOCALE_COUNTRY_MAP[countryCode]) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Base currency is INR: Product.price / compareAtPrice are stored in INR.
- * `rates` maps other currency codes to "1 INR = X <code>".
+ * Base currency is INR. `rates` maps a currency code to "1 <code> = X INR"
+ * (e.g. USD: 83.5 means $1 = ₹83.5) — the natural direction for an
+ * India-based store, and what the admin panel now asks for directly.
  */
 export function getDisplayPrice(
   product: Pick<Product, "price" | "compareAtPrice" | "regionalPrices">,
@@ -33,47 +51,35 @@ export function getDisplayPrice(
     return { price: explicit.price, compareAtPrice: explicit.compareAtPrice, estimated: false };
   }
 
-  const rate = rates[currency] ?? 1;
+  const rate = rates[currency];
+  if (!rate || rate <= 0) {
+    // No rate configured for this currency — show INR rather than divide by zero/garbage.
+    return { price: product.price, compareAtPrice: product.compareAtPrice, estimated: false };
+  }
+
   return {
-    price: Math.round(product.price * rate * 100) / 100,
-    compareAtPrice: product.compareAtPrice ? Math.round(product.compareAtPrice * rate * 100) / 100 : undefined,
+    price: Math.round((product.price / rate) * 100) / 100,
+    compareAtPrice: product.compareAtPrice ? Math.round((product.compareAtPrice / rate) * 100) / 100 : undefined,
     estimated: true,
   };
 }
 
-/** Derives symbol/label for ANY ISO 4217 code via Intl — no hardcoded list needed. */
-export function getCurrencyMeta(code: CurrencyCode): { symbol: string; label: string; locale: string } {
-  let symbol = code;
-  try {
-    const parts = new Intl.NumberFormat("en", {
-      style: "currency",
-      currency: code,
-      currencyDisplay: "symbol",
-    }).formatToParts(0);
-    symbol = parts.find((p) => p.type === "currency")?.value ?? code;
-  } catch {
-    // invalid/unrecognized ISO code — fall back to showing the raw code
-  }
-  let label = code;
+/** Display name only (e.g. "US Dollar") — the SYMBOL comes from the admin-set value, not this. */
+export function getCurrencyLabel(code: CurrencyCode): string {
   try {
     const dn = new Intl.DisplayNames(["en"], { type: "currency" });
-    label = dn.of(code) ?? code;
+    return dn.of(code) ?? code;
   } catch {
-    // Intl.DisplayNames unsupported in this runtime — fall back to the code
+    return code;
   }
-  return { symbol, label, locale: code === "INR" ? "en-IN" : "en-US" };
 }
 
-export function formatMoney(amount: number, currency: CurrencyCode): string {
-  const meta = getCurrencyMeta(currency);
-  try {
-    return new Intl.NumberFormat(meta.locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: currency === "INR" ? 0 : 2,
-      maximumFractionDigits: currency === "INR" ? 0 : 2,
-    }).format(amount);
-  } catch {
-    return `${meta.symbol}${amount.toFixed(2)}`;
-  }
+export function formatMoney(amount: number, currency: CurrencyCode, symbol: string): string {
+  const decimals = currency === "INR" ? 0 : 2;
+  const locale = currency === "INR" ? "en-IN" : "en-US";
+  const formattedNumber = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(amount);
+  return `${symbol}${formattedNumber}`;
 }

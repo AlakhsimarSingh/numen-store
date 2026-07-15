@@ -17,6 +17,7 @@ export default function AdminSettingsPage() {
   const setRate = useCurrencyStore((s) => s.setRate);
   const removeCurrency = useCurrencyStore((s) => s.removeCurrency);
   const showToast = useToastStore((s) => s.show);
+  const setSymbol = useCurrencyStore((s) => s.setSymbol);
 
   useEffect(() => {
     loadRates();
@@ -26,7 +27,8 @@ export default function AdminSettingsPage() {
   const [newRate, setNewRate] = useState("");
   const [addingCurrency, setAddingCurrency] = useState(false);
   const [savingCode, setSavingCode] = useState<string | null>(null);
-
+  const [newSymbol, setNewSymbol] = useState("");
+  const [savingSymbolCode, setSavingSymbolCode] = useState<string | null>(null);
   const [form, setForm] = useState({
     siteName: settings.siteName,
     tagline: settings.tagline,
@@ -77,24 +79,43 @@ export default function AdminSettingsPage() {
     e.preventDefault();
     const code = newCode.trim().toUpperCase();
     const rate = parseFloat(newRate);
+    const symbol = newSymbol.trim();
     if (!/^[A-Z]{3}$/.test(code)) {
       showToast("Enter a valid 3-letter ISO code (e.g. AED)", "error");
       return;
     }
     if (!Number.isFinite(rate) || rate <= 0) {
-      showToast("Enter a valid positive rate", "error");
+      showToast("Enter a valid positive rate (e.g. 1 USD = 83.5 INR \u2192 enter 83.5)", "error");
+      return;
+    }
+    if (!symbol) {
+      showToast("Enter a symbol/annotation (e.g. $, \u20ac, AED)", "error");
       return;
     }
     setAddingCurrency(true);
     try {
-      await addCurrency(code, rate);
+      await addCurrency(code, rate, symbol);
       showToast(`${code} added`);
       setNewCode("");
       setNewRate("");
+      setNewSymbol("");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to add currency", "error");
     } finally {
       setAddingCurrency(false);
+    }
+  }
+
+  async function handleSymbolChange(code: string, value: string) {
+    const symbol = value.trim();
+    if (!symbol) return;
+    setSavingSymbolCode(code);
+    try {
+      await setSymbol(code, symbol);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to update symbol", "error");
+    } finally {
+      setSavingSymbolCode(null);
     }
   }
 
@@ -193,69 +214,86 @@ export default function AdminSettingsPage() {
         </div>
 
         <div className="rounded-2xl border border-white/5 bg-surface p-6">
-          <h2 className="font-display text-base font-bold text-ink">Currency conversion rates</h2>
-          <p className="mt-1 font-body text-xs text-muted">
-            Base currency is ₹ (INR) — 1 INR equals the value below. Used only when a product has no explicit
-            regional price set.
-          </p>
+            <h2 className="font-display text-base font-bold text-ink">Currency conversion rates</h2>
+            <p className="mt-1 font-body text-xs text-muted">
+              Base currency is ₹ (INR). Enter how many rupees 1 unit of that currency is worth — e.g. if $1 = ₹83.5,
+              enter 83.5 for USD. Used only when a product has no explicit regional price set.
+            </p>
 
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between rounded-xl border border-white/5 bg-bg px-3 py-2.5">
-              <span className="font-mono text-xs text-ink">INR (base)</span>
-              <span className="font-mono text-xs text-muted">1.00 — fixed</span>
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between rounded-xl border border-white/5 bg-bg px-3 py-2.5">
+                <span className="font-mono text-xs text-ink">₹ INR (base)</span>
+                <span className="font-mono text-xs text-muted">1.00 — fixed</span>
+              </div>
+              {currencies
+                .filter((c) => c.code !== "INR")
+                .map((c) => (
+                  <div key={c.code} className="flex items-center gap-2 rounded-xl border border-white/5 bg-bg px-3 py-2.5">
+                    <span className="w-12 shrink-0 font-mono text-xs text-ink">{c.code}</span>
+                    <input
+                      defaultValue={c.symbol}
+                      onBlur={(e) => handleSymbolChange(c.code, e.target.value)}
+                      placeholder="$"
+                      className="w-14 shrink-0 rounded-lg border border-white/10 bg-surface px-2 py-1.5 text-center font-mono text-xs text-ink focus:outline-none focus:border-accent/50"
+                    />
+                    <span className="shrink-0 font-mono text-[11px] text-muted">1 {c.code} = ₹</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      defaultValue={rates[c.code]}
+                      onBlur={(e) => handleRateChange(c.code, e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-surface px-3 py-1.5 font-mono text-xs text-ink focus:outline-none focus:border-accent/50"
+                    />
+                    {(savingCode === c.code || savingSymbolCode === c.code) && <Loader2 size={14} className="animate-spin text-muted" />}
+                    <button type="button" onClick={() => handleRemoveCurrency(c.code)} className="shrink-0 text-muted hover:text-accent2">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
             </div>
-            {currencies
-              .filter((c) => c.code !== "INR")
-              .map((c) => (
-                <div key={c.code} className="flex items-center gap-3 rounded-xl border border-white/5 bg-bg px-3 py-2.5">
-                  <span className="w-14 font-mono text-xs text-ink">{c.code}</span>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    defaultValue={rates[c.code]}
-                    onBlur={(e) => handleRateChange(c.code, e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-surface px-3 py-1.5 font-mono text-xs text-ink focus:outline-none focus:border-accent/50"
-                  />
-                  {savingCode === c.code && <Loader2 size={14} className="animate-spin text-muted" />}
-                  <button type="button" onClick={() => handleRemoveCurrency(c.code)} className="shrink-0 text-muted hover:text-accent2">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
+
+            <form onSubmit={handleAddCurrency} className="mt-4 flex flex-wrap items-end gap-2">
+              <div className="w-24">
+                <label className="mb-1.5 block font-body text-xs text-muted">ISO code</label>
+                <input
+                  value={newCode}
+                  onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                  placeholder="USD"
+                  maxLength={3}
+                  className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 font-mono text-xs uppercase text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              <div className="w-20">
+                <label className="mb-1.5 block font-body text-xs text-muted">Symbol</label>
+                <input
+                  value={newSymbol}
+                  onChange={(e) => setNewSymbol(e.target.value)}
+                  placeholder="$"
+                  maxLength={6}
+                  className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="mb-1.5 block font-body text-xs text-muted">1 {newCode || "___"} = ₹?</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newRate}
+                  onChange={(e) => setNewRate(e.target.value)}
+                  placeholder="83.50"
+                  className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={addingCurrency}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-4 py-2 font-body text-xs font-semibold text-bg disabled:opacity-70"
+              >
+                {addingCurrency ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                Add
+              </button>
+            </form>
           </div>
-
-          <form onSubmit={handleAddCurrency} className="mt-4 flex items-end gap-2">
-            <div className="flex-1">
-              <label className="mb-1.5 block font-body text-xs text-muted">Add currency (ISO code)</label>
-              <input
-                value={newCode}
-                onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-                placeholder="AED"
-                maxLength={3}
-                className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 font-mono text-xs uppercase text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="mb-1.5 block font-body text-xs text-muted">1 INR = ?</label>
-              <input
-                type="number"
-                step="0.0001"
-                value={newRate}
-                onChange={(e) => setNewRate(e.target.value)}
-                placeholder="0.044"
-                className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={addingCurrency}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-4 py-2 font-body text-xs font-semibold text-bg disabled:opacity-70"
-            >
-              {addingCurrency ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              Add
-            </button>
-          </form>
-        </div>
 
         <div className="rounded-2xl border border-white/5 bg-surface p-6">
           <h2 className="font-display text-base font-bold text-ink">Site-wide announcement</h2>

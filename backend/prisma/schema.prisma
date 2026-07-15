@@ -189,7 +189,7 @@ model Product {
   variantStock   Json?    // VariantStockEntry[]
   regionalPrices Json?    // Partial<Record<Currency, {price, compareAtPrice}>>
   lookHotspots   LookHotspot[]
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -397,6 +397,7 @@ model SiteSettings {
 model CurrencyRate {
   code String @id // "INR" | "EUR" | "GBP"
   rate Float
+  symbol String @default("")
 }
 
 model AdminAllowlist {
