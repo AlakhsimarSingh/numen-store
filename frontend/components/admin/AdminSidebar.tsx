@@ -56,7 +56,9 @@ const navGroups: NavGroup[] = [
   },
   {
     label: "System",
-    items: [{ label: "Settings", href: "/admin/settings", icon: Settings }],
+    items: [
+      { label: "Admin Access", href: "/admin/access", icon: ShieldCheck },
+      { label: "Settings", href: "/admin/settings", icon: Settings }],
   },
 ];
 
