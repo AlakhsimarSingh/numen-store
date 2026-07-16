@@ -7,10 +7,12 @@ import { motion } from "framer-motion";
 import { Minus, Plus, ShoppingBag, Tag, Trash2 } from "lucide-react";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { computeTotals } from "@/src/lib/order";
-import { formatPrice } from "@/src/lib/utils";
+import { getDisplayPrice, formatMoney } from "@/src/lib/currency";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { useShallow } from "zustand/react/shallow";
+
 const ease = [0.16, 1, 0.3, 1] as const;
 
 export default function CartPage() {
@@ -22,11 +24,15 @@ export default function CartPage() {
   const discountPercent = useCheckoutStore((s) => s.discountPercent);
   const applyPromo = useCheckoutStore((s) => s.applyPromo);
 
+  const currency = useCurrencyStore((s) => s.currency);
+  const rates = useCurrencyStore((s) => s.rates);
+  const symbols = useCurrencyStore((s) => s.symbols);
+  const symbol = symbols[currency] ?? currency;
+
   const [promoInput, setPromoInput] = useState(promoCode);
   const [promoError, setPromoError] = useState("");
   const [promoApplying, setPromoApplying] = useState(false);
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
   const showToast = useToastStore((s) => s.show);
   const shippingSettings = useSiteSettingsStore(
     useShallow((s) => ({
@@ -36,11 +42,24 @@ export default function CartPage() {
       codFee: s.codFee,
     }))
   );
+
+  // Each line's display price honors that product's regional override if
+  // one exists, falling back to rate conversion — same logic as the
+  // product page, applied per item rather than to a single aggregate.
+  const lineDisplays = items.map((item) => ({
+    item,
+    display: getDisplayPrice(item, currency, rates),
+  }));
+  const subtotal = lineDisplays.reduce((sum, { item, display }) => sum + display.price * item.qty, 0);
+  const anyEstimated = lineDisplays.some(({ display }) => display.estimated);
+
   const { discount, shippingFee, tax, total } = computeTotals({
     subtotal,
     discountPercent,
     paymentMethod: null,
     settings: shippingSettings,
+    currency,
+    rates,
   });
 
   async function handleApplyPromo() {
@@ -82,7 +101,7 @@ export default function CartPage() {
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
-          {items.map((item, i) => (
+          {lineDisplays.map(({ item, display }, i) => (
             <motion.div
               key={item.productId}
               initial={{ opacity: 0, y: 12 }}
@@ -96,7 +115,10 @@ export default function CartPage() {
 
               <div className="min-w-0 flex-1">
                 <p className="truncate font-body text-sm text-ink">{item.name}</p>
-                <p className="mt-1 font-mono text-sm text-muted">{formatPrice(item.price)}</p>
+                <p className="mt-1 font-mono text-sm text-muted">
+                  {display.estimated && <span className="text-muted/70">~</span>}
+                  {formatMoney(display.price, currency, symbol)}
+                </p>
 
                 <div className="mt-3 flex items-center gap-2">
                   <button
@@ -116,7 +138,9 @@ export default function CartPage() {
               </div>
 
               <div className="flex flex-col items-end gap-3">
-                <span className="font-mono text-sm text-ink">{formatPrice(item.price * item.qty)}</span>
+                <span className="font-mono text-sm text-ink">
+                  {formatMoney(display.price * item.qty, currency, symbol)}
+                </span>
                 <button
                   onClick={() => removeItem(item.productId)}
                   aria-label="Remove item"
@@ -163,27 +187,33 @@ export default function CartPage() {
           <div className="mt-5 space-y-2 border-t border-white/5 pt-4 font-body text-sm">
             <div className="flex justify-between text-muted">
               <span>Subtotal</span>
-              <span className="text-ink">{formatPrice(subtotal)}</span>
+              <span className="text-ink">
+                {anyEstimated && <span className="text-muted/70">~</span>}
+                {formatMoney(subtotal, currency, symbol)}
+              </span>
             </div>
             {discount > 0 && (
               <div className="flex justify-between text-muted">
                 <span>Discount</span>
-                <span className="text-accent">-{formatPrice(discount)}</span>
+                <span className="text-accent">-{formatMoney(discount, currency, symbol)}</span>
               </div>
             )}
             <div className="flex justify-between text-muted">
               <span>Shipping</span>
-              <span className="text-ink">{shippingFee === 0 ? "Free" : formatPrice(shippingFee)}</span>
+              <span className="text-ink">{shippingFee === 0 ? "Free" : formatMoney(shippingFee, currency, symbol)}</span>
             </div>
             <div className="flex justify-between text-muted">
               <span>Estimated tax</span>
-              <span className="text-ink">{formatPrice(tax)}</span>
+              <span className="text-ink">{formatMoney(tax, currency, symbol)}</span>
             </div>
             <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
               <span className="text-ink">Total</span>
-              <span className="text-ink">{formatPrice(total)}</span>
+              <span className="text-ink">{formatMoney(total, currency, symbol)}</span>
             </div>
           </div>
+          {anyEstimated && (
+            <p className="mt-2 font-mono text-[10px] text-muted">Converted estimate — exact pricing shown at checkout.</p>
+          )}
 
           <Link
             href="/checkout/shipping"

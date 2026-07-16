@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { serializeOrder } from "@/lib/order/order";
 import { createOrderFromItems, OrderCreationError } from "@/lib/orders/createOrder";
-import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "You must be logged in to place an order." }, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ error: "You must be logged in to place an order." }, { status: 401 });
+  }
 
   const body = await req.json().catch(() => null);
-  if (!body) return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  if (!body) {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
 
-  const { items, shipping, paymentMethod, promoCode } = body;
+  const { items, shipping, paymentMethod, promoCode, currency } = body;
 
   if (paymentMethod !== "cod") {
-    return NextResponse.json(
-      { error: "Card and UPI payments must go through the Razorpay checkout flow." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "This endpoint only handles Cash on Delivery orders." }, { status: 400 });
   }
 
   try {
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
       shipping,
       paymentMethod: "cod",
       promoCode,
-      paymentStatus: "PENDING", // COD is only "paid" once collected on delivery
+      paymentStatus: "PENDING",
+      currency,
     });
     return NextResponse.json(order, { status: 201 });
   } catch (err) {
@@ -41,7 +43,9 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const orders = await prisma.order.findMany({
     where: { userId: user.id },

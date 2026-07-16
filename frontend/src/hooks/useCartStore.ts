@@ -42,6 +42,8 @@ export const useCartStore = create<CartState>()(
                 baseId: product.id,
                 name: displayName,
                 price: product.price,
+                compareAtPrice: product.compareAtPrice,
+                regionalPrices: product.regionalPrices,
                 image: product.image,
                 qty,
                 color: variant?.color,

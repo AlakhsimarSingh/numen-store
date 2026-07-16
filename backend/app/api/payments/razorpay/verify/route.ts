@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       paymentStatus: "PAID",
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
+      currency: pending.currency,
     });
 
     await prisma.pendingCheckout.delete({ where: { id: pending.id } }).catch(() => {});

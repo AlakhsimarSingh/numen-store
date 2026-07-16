@@ -83,3 +83,20 @@ export function formatMoney(amount: number, currency: CurrencyCode, symbol: stri
   }).format(amount);
   return `${symbol}${formattedNumber}`;
 }
+/**
+ * Converts a flat, INR-denominated amount (shipping fee, free-shipping
+ * threshold, COD fee — none of which have a per-currency override in
+ * SiteSettings) into the target display currency using the same rate
+ * table as product pricing. Falls back to the raw INR amount if no rate
+ * is configured, same policy as getDisplayPrice.
+ */
+export function convertBaseAmount(
+  amountInINR: number,
+  currency: CurrencyCode,
+  rates: Record<string, number>
+): number {
+  if (currency === "INR") return amountInINR;
+  const rate = rates[currency];
+  if (!rate || rate <= 0) return amountInINR;
+  return Math.round((amountInINR / rate) * 100) / 100;
+}

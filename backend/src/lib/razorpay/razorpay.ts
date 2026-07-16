@@ -12,7 +12,14 @@ export function getRazorpay(): Razorpay {
   }
   return client;
 }
+const ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW", "VND", "CLP"]);
 
+export function toSmallestUnit(amount: number, currency: string): number {
+  if (ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase())) {
+    return Math.round(amount);
+  }
+  return Math.round(amount * 100);
+}
 /** Verifies the signature Razorpay sends back after a successful checkout. */
 export function verifyPaymentSignature(params: {
   razorpayOrderId: string;

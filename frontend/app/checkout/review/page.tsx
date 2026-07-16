@@ -11,8 +11,9 @@ import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
 import { useAuthStore } from "@/src/hooks/useAuthStore";
 import { useRequireAuth } from "@/src/hooks/useRequireAuth";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { computeTotals } from "@/src/lib/order";
-import { formatPrice } from "@/src/lib/utils";
+import { getDisplayPrice, formatMoney } from "@/src/lib/currency";
 import { useShallow } from "zustand/react/shallow";
 import { createRazorpayOrder, verifyRazorpayPayment, loadRazorpayScript, openRazorpayCheckout } from "@/src/lib/payments";
 
@@ -33,6 +34,11 @@ export default function ReviewPage() {
   const discountPercent = useCheckoutStore((s) => s.discountPercent);
   const applyPromo = useCheckoutStore((s) => s.applyPromo);
   const placeOrder = useCheckoutStore((s) => s.placeOrder);
+
+  const currency = useCurrencyStore((s) => s.currency);
+  const rates = useCurrencyStore((s) => s.rates);
+  const symbols = useCurrencyStore((s) => s.symbols);
+  const symbol = symbols[currency] ?? currency;
 
   const [promoInput, setPromoInput] = useState(promoCode);
   const [promoError, setPromoError] = useState("");
@@ -62,12 +68,20 @@ export default function ReviewPage() {
     );
   }
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.qty, 0);
+  const lineDisplays = items.map((item) => ({
+    item,
+    display: getDisplayPrice(item, currency, rates),
+  }));
+  const subtotal = lineDisplays.reduce((sum, { item, display }) => sum + display.price * item.qty, 0);
+  const anyEstimated = lineDisplays.some(({ display }) => display.estimated);
+
   const { discount, shippingFee, tax, codFee, total } = computeTotals({
     subtotal,
     discountPercent,
     paymentMethod,
     settings: shippingSettings,
+    currency,
+    rates,
   });
 
   async function handleApplyPromo() {
@@ -95,7 +109,7 @@ export default function ReviewPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ items: orderItems, shipping, paymentMethod: "cod", promoCode: promoCode || undefined }),
+          body: JSON.stringify({ items: orderItems, shipping, paymentMethod: "cod", promoCode: promoCode || undefined, currency }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -121,6 +135,7 @@ export default function ReviewPage() {
           shipping,
           paymentMethod,
           promoCode: promoCode || undefined,
+          currency,
         }),
         loadRazorpayScript(),
       ]);
@@ -208,7 +223,7 @@ export default function ReviewPage() {
                 {items.length} item{items.length !== 1 ? "s" : ""}
               </p>
               <div className="space-y-3">
-                {items.map((item) => (
+                {lineDisplays.map(({ item, display }) => (
                   <div key={item.productId} className="flex items-center gap-3">
                     <div className="relative h-16 w-14 shrink-0 overflow-hidden rounded-lg bg-surface2">
                       <Image src={item.image} alt={item.name} fill sizes="56px" className="object-cover" />
@@ -217,7 +232,9 @@ export default function ReviewPage() {
                       <p className="truncate font-body text-sm text-ink">{item.name}</p>
                       <p className="font-mono text-xs text-muted">Qty {item.qty}</p>
                     </div>
-                    <span className="font-mono text-sm text-ink">{formatPrice(item.price * item.qty)}</span>
+                    <span className="font-mono text-sm text-ink">
+                      {formatMoney(display.price * item.qty, currency, symbol)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -250,13 +267,22 @@ export default function ReviewPage() {
 
             <div className="rounded-2xl border border-white/5 bg-surface p-5">
               <div className="space-y-2 font-body text-sm">
-                <div className="flex justify-between text-muted"><span>Subtotal</span><span className="text-ink">{formatPrice(subtotal)}</span></div>
-                {discount > 0 && <div className="flex justify-between text-muted"><span>Discount</span><span className="text-accent">-{formatPrice(discount)}</span></div>}
-                <div className="flex justify-between text-muted"><span>Shipping</span><span className="text-ink">{shippingFee === 0 ? "Free" : formatPrice(shippingFee)}</span></div>
-                <div className="flex justify-between text-muted"><span>Tax</span><span className="text-ink">{formatPrice(tax)}</span></div>
-                {codFee > 0 && <div className="flex justify-between text-muted"><span>COD fee</span><span className="text-ink">{formatPrice(codFee)}</span></div>}
-                <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base"><span className="text-ink">Total</span><span className="text-ink">{formatPrice(total)}</span></div>
+                <div className="flex justify-between text-muted">
+                  <span>Subtotal</span>
+                  <span className="text-ink">
+                    {anyEstimated && <span className="text-muted/70">~</span>}
+                    {formatMoney(subtotal, currency, symbol)}
+                  </span>
+                </div>
+                {discount > 0 && <div className="flex justify-between text-muted"><span>Discount</span><span className="text-accent">-{formatMoney(discount, currency, symbol)}</span></div>}
+                <div className="flex justify-between text-muted"><span>Shipping</span><span className="text-ink">{shippingFee === 0 ? "Free" : formatMoney(shippingFee, currency, symbol)}</span></div>
+                <div className="flex justify-between text-muted"><span>Tax</span><span className="text-ink">{formatMoney(tax, currency, symbol)}</span></div>
+                {codFee > 0 && <div className="flex justify-between text-muted"><span>COD fee</span><span className="text-ink">{formatMoney(codFee, currency, symbol)}</span></div>}
+                <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base"><span className="text-ink">Total</span><span className="text-ink">{formatMoney(total, currency, symbol)}</span></div>
               </div>
+              {anyEstimated && (
+                <p className="mt-2 font-mono text-[10px] text-muted">Converted estimate — exact pricing shown at checkout.</p>
+              )}
 
               {orderError && <p className="mt-3 font-mono text-[11px] text-accent2">{orderError}</p>}
 
@@ -266,7 +292,7 @@ export default function ReviewPage() {
                 className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-accent py-3.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {placing && <Loader2 size={16} className="animate-spin" />}
-                {placing ? "Processing…" : paymentMethod === "cod" ? `Place Order · ${formatPrice(total)}` : `Pay ${formatPrice(total)}`}
+                {placing ? "Processing…" : paymentMethod === "cod" ? `Place Order · ${formatMoney(total, currency, symbol)}` : `Pay ${formatMoney(total, currency, symbol)}`}
               </button>
             </div>
           </div>

@@ -27,7 +27,7 @@ export interface ReturnRequest {
 }
 
 export interface OrderSnapshot {
-  id: string;
+id: string;
   items: CartItem[];
   subtotal: number;
   discount: number;
@@ -35,6 +35,7 @@ export interface OrderSnapshot {
   tax: number;
   codFee: number;
   total: number;
+  currency: string;
   shipping: ShippingInfo;
   paymentMethod: PaymentMethodId;
   paymentStatus: PaymentStatus;

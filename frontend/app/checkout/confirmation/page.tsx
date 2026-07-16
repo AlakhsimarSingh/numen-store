@@ -6,13 +6,15 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { CheckCircle2, Package } from "lucide-react";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
-import { formatPrice } from "@/src/lib/utils";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
+import { formatMoney } from "@/src/lib/currency";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
 export default function ConfirmationPage() {
   const router = useRouter();
   const lastOrder = useCheckoutStore((s) => s.lastOrder);
+  const symbols = useCurrencyStore((s) => s.symbols);
 
   useEffect(() => {
     if (!lastOrder) {
@@ -24,6 +26,12 @@ export default function ConfirmationPage() {
 
   const eta = new Date(lastOrder.placedAt);
   eta.setDate(eta.getDate() + 5);
+
+  // Always formats using what was actually charged (lastOrder.currency),
+  // not whatever currency is currently selected in the navbar — a receipt
+  // shouldn't change if the shopper switches currency after checking out.
+  const orderCurrency = lastOrder.currency ?? "INR";
+  const orderSymbol = symbols[orderCurrency] ?? orderCurrency;
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 py-16 text-center">
@@ -71,7 +79,7 @@ export default function ConfirmationPage() {
         </div>
         <div className="mt-2 flex items-center justify-between">
           <span className="font-body text-sm text-muted">Total paid</span>
-          <span className="font-mono text-sm text-ink">{formatPrice(lastOrder.total)}</span>
+          <span className="font-mono text-sm text-ink">{formatMoney(lastOrder.total, orderCurrency, orderSymbol)}</span>
         </div>
         <div className="mt-2 flex items-center justify-between">
           <span className="font-body text-sm text-muted">Estimated delivery</span>

@@ -11,6 +11,7 @@ export async function createRazorpayOrder(payload: {
   shipping: ShippingInfo;
   paymentMethod: "card" | "upi";
   promoCode?: string;
+  currency: string;
 }): Promise<RazorpayOrderResponse> {
   const res = await fetch("/api/payments/razorpay/create-order", {
     method: "POST",

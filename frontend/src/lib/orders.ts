@@ -43,12 +43,13 @@ export interface Order {
   tax: number;
   codFee: number;
   total: number;
+  currency: string;
+  paymentStatus: PaymentStatus;
   shipping: ShippingSnapshot;
   paymentMethod: PaymentMethodId;
   status: OrderStatus;
   placedAt: string;
   returnRequest?: ReturnRequest;
-  paymentStatus: PaymentStatus;
 }
 
 export async function fetchOrders(): Promise<Order[]> {

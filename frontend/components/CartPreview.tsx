@@ -6,7 +6,8 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { useCartStore } from "@/src/hooks/useCartStore";
-import { formatPrice } from "@/src/lib/utils";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
+import { getDisplayPrice, formatMoney } from "@/src/lib/currency";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 const CLOSE_DELAY = 150;
@@ -17,9 +18,17 @@ export default function CartPreview() {
 
   const items = useCartStore((s) => s.items);
   const totalItems = useCartStore((s) => s.totalItems());
-  const totalPrice = useCartStore((s) => s.totalPrice());
   const removeItem = useCartStore((s) => s.removeItem);
   const updateQty = useCartStore((s) => s.updateQty);
+
+  const currency = useCurrencyStore((s) => s.currency);
+  const rates = useCurrencyStore((s) => s.rates);
+  const symbols = useCurrencyStore((s) => s.symbols);
+  const symbol = symbols[currency] ?? currency;
+
+  const lineDisplays = items.map((item) => ({ item, display: getDisplayPrice(item, currency, rates) }));
+  const subtotal = lineDisplays.reduce((sum, { item, display }) => sum + display.price * item.qty, 0);
+  const anyEstimated = lineDisplays.some(({ display }) => display.estimated);
 
   function scheduleClose() {
     closeTimer.current = setTimeout(() => setOpen(false), CLOSE_DELAY);
@@ -62,7 +71,7 @@ export default function CartPreview() {
             ) : (
               <>
                 <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
-                  {items.map((item) => (
+                  {lineDisplays.map(({ item, display }) => (
                     <div key={item.productId} className="flex items-center gap-3">
                       <div className="relative h-14 w-12 shrink-0 overflow-hidden rounded-lg bg-surface2">
                         <Image src={item.image} alt={item.name} fill sizes="48px" className="object-cover" />
@@ -87,7 +96,8 @@ export default function CartPreview() {
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <span className="font-mono text-xs text-ink">
-                          {formatPrice(item.price * item.qty)}
+                          {display.estimated && <span className="text-muted/70">~</span>}
+                          {formatMoney(display.price * item.qty, currency, symbol)}
                         </span>
                         <button
                           onClick={() => removeItem(item.productId)}
@@ -103,7 +113,10 @@ export default function CartPreview() {
 
                 <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
                   <span className="font-body text-xs text-muted">Subtotal</span>
-                  <span className="font-mono text-sm text-ink">{formatPrice(totalPrice)}</span>
+                  <span className="font-mono text-sm text-ink">
+                    {anyEstimated && <span className="text-muted/70">~</span>}
+                    {formatMoney(subtotal, currency, symbol)}
+                  </span>
                 </div>
 
                 <Link

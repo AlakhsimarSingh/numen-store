@@ -32,7 +32,7 @@ export async function GET() {
   ] = await Promise.all([
     prisma.order.aggregate({
       where: { status: { not: "CANCELLED" } },
-      _sum: { total: true },
+      _sum: { totalBaseINR: true },
     }),
     prisma.order.count(),
     prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -79,7 +79,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    revenue: Number(revenueAgg._sum.total ?? 0),
+    revenue: Number(revenueAgg._sum.totalBaseINR ?? 0),
     ordersCount,
     ordersByStatus,
     pendingReturnsCount,

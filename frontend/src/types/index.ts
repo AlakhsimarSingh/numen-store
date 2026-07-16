@@ -52,6 +52,8 @@ export interface CartItem {
   baseId: string;
   name: string;
   price: number;
+  compareAtPrice?: number;
+  regionalPrices?: Partial<Record<CurrencyCode, RegionalPrice>>;
   image: string;
   qty: number;
   color?: string;

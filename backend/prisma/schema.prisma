@@ -270,6 +270,7 @@ model Order {
   tax            Decimal         @db.Decimal(10, 2) @default(0)
   codFee         Decimal         @db.Decimal(10, 2) @default(0)
   total          Decimal         @db.Decimal(10, 2)
+  totalBaseINR   Decimal         @db.Decimal(10, 2)
   currency       String          @default("USD")
   status         OrderStatus     @default(PROCESSING)
   paymentMethod  PaymentMethodId
@@ -300,6 +301,7 @@ model PendingCheckout {
   promoCode        String?
   paymentMethod    PaymentMethodId
   amount           Decimal         @db.Decimal(10, 2)
+  currency         String          @default("INR")
   createdAt        DateTime        @default(now())
 
   @@index([userId])

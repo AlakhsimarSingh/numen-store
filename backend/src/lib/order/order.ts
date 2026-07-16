@@ -1,4 +1,5 @@
 import type { Order, OrderItem } from "@prisma/client";
+import { convertBaseAmount } from "@/lib/currency/currency";
 
 export interface OrderSettings {
   freeShippingThreshold: number;
@@ -35,17 +36,26 @@ export function computeTotals({
   discountPercent,
   paymentMethod,
   settings = DEFAULT_ORDER_SETTINGS,
+  currency = "INR",
+  rates = {},
 }: {
   subtotal: number;
   discountPercent: number;
   paymentMethod: "CARD" | "UPI" | "COD";
   settings?: OrderSettings;
+  /** Currency `subtotal` is already expressed in — used to convert the flat INR fee settings into the same currency. */
+  currency?: string;
+  rates?: Record<string, number>;
 }) {
+  const freeShippingThreshold = convertBaseAmount(settings.freeShippingThreshold, currency, rates);
+  const shippingFeeAmount = convertBaseAmount(settings.shippingFee, currency, rates);
+  const codFeeAmount = convertBaseAmount(settings.codFee, currency, rates);
+
   const discount = Math.round(subtotal * (discountPercent / 100) * 100) / 100;
   const discounted = Math.max(0, subtotal - discount);
-  const shippingFee = discounted === 0 || discounted >= settings.freeShippingThreshold ? 0 : settings.shippingFee;
+  const shippingFee = discounted === 0 || discounted >= freeShippingThreshold ? 0 : shippingFeeAmount;
   const tax = Math.round(discounted * settings.taxRate * 100) / 100;
-  const codFee = paymentMethod === "COD" ? settings.codFee : 0;
+  const codFee = paymentMethod === "COD" ? codFeeAmount : 0;
   const total = Math.round((discounted + shippingFee + tax + codFee) * 100) / 100;
   return { discount, shippingFee, tax, codFee, total };
 }
@@ -64,7 +74,6 @@ export function serializeOrder(order: OrderWithItems) {
       qty: i.qty,
       color: i.color ?? undefined,
       size: i.size ?? undefined,
-      paymentStatus: order.paymentStatus,
     })),
     subtotal: Number(order.subtotal),
     discount: Number(order.discount),
@@ -72,6 +81,8 @@ export function serializeOrder(order: OrderWithItems) {
     tax: Number(order.tax),
     codFee: Number(order.codFee),
     total: Number(order.total),
+    currency: order.currency,
+    paymentStatus: order.paymentStatus.toLowerCase(),
     shipping: order.shippingSnapshot,
     paymentMethod: PAYMENT_METHOD_REVERSE[order.paymentMethod as keyof typeof PAYMENT_METHOD_REVERSE],
     placedAt: order.placedAt.toISOString(),

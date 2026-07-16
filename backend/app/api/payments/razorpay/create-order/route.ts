@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getRazorpay } from "@/lib/razorpay/razorpay";
+import { getRazorpay, toSmallestUnit } from "@/lib/razorpay/razorpay";
 import { computeOrderTotal, OrderCreationError } from "@/lib/orders/createOrder";
 
 export async function POST(req: NextRequest) {
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
 
-  const { items, shipping, paymentMethod, promoCode } = body;
+  const { items, shipping, paymentMethod, promoCode, currency: requestedCurrency } = body;
 
   if (paymentMethod !== "card" && paymentMethod !== "upi") {
     return NextResponse.json({ error: "Invalid payment method for Razorpay checkout." }, { status: 400 });
@@ -24,12 +24,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const total = await computeOrderTotal({ items, paymentMethod, promoCode });
-    const amountInPaise = Math.round(total * 100);
+    const { total, currency } = await computeOrderTotal({
+      items,
+      paymentMethod,
+      promoCode,
+      currency: requestedCurrency,
+    });
+    const amountInSmallestUnit = toSmallestUnit(total, currency);
 
     const razorpayOrder = await getRazorpay().orders.create({
-      amount: amountInPaise,
-      currency: "INR",
+      amount: amountInSmallestUnit,
+      currency,
       receipt: `numen_${Date.now()}`,
     });
 
@@ -42,13 +47,14 @@ export async function POST(req: NextRequest) {
         promoCode: promoCode ?? null,
         paymentMethod: paymentMethod === "card" ? "CARD" : "UPI",
         amount: total,
+        currency,
       },
     });
 
     return NextResponse.json({
       razorpayOrderId: razorpayOrder.id,
-      amount: amountInPaise,
-      currency: "INR",
+      amount: amountInSmallestUnit,
+      currency,
       keyId: process.env.RAZORPAY_KEY_ID,
     });
   } catch (err) {
