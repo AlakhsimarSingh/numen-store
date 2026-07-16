@@ -6,7 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Product } from "@/src/types";
-import { formatPrice } from "@/src/lib/utils";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
+import { getDisplayPrice, formatMoney } from "@/src/lib/currency";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 const SWIPE_THRESHOLD = 80;
@@ -28,14 +29,14 @@ export default function ProductStack({
   onChangeIndex: (i: number) => void;
 }) {
   const [current, setCurrent] = useState(0);
+  const currency = useCurrencyStore((s) => s.currency);
+  const rates = useCurrencyStore((s) => s.rates);
+  const symbols = useCurrencyStore((s) => s.symbols);
 
   useEffect(() => {
     onChangeIndex(current);
   }, [current, onChangeIndex]);
 
-  // Guards against a brand-new store with zero products: without this,
-  // `% products.length` below becomes `% 0` (NaN) the moment either arrow
-  // is clicked, permanently breaking the carousel's index state.
   if (products.length === 0) return null;
 
   function advance(dir: 1 | -1) {
@@ -48,7 +49,7 @@ export default function ProductStack({
   }
 
   return (
-    <div className="relative flex h-[440px] items-center justify-center md:h-[540px]">
+    <div className="relative flex h-[380px] items-center justify-center sm:h-[440px] md:h-[540px]">
       {products.map((product, i) => {
         const offset = circularOffset(i, current, products.length);
         const isActive = offset === 0;
@@ -60,6 +61,10 @@ export default function ProductStack({
         const scale = 1 - Math.abs(offset) * 0.09;
         const opacity = hidden ? 0 : 1 - Math.abs(offset) * 0.22;
         const zIndex = 10 - Math.abs(offset);
+
+        const display = getDisplayPrice(product, currency, rates);
+        const symbol = symbols[currency] ?? currency;
+        const formattedPrice = formatMoney(display.price, currency, symbol);
 
         return (
           <motion.div
@@ -103,7 +108,10 @@ export default function ProductStack({
                     Spotlight Drop
                   </p>
                   <p className="truncate font-body text-sm text-ink">{product.name}</p>
-                  <p className="mt-0.5 font-mono text-xs text-muted">{formatPrice(product.price)}</p>
+                  <p className="mt-0.5 font-mono text-xs text-muted">
+                    {display.estimated && <span className="text-muted/70">~</span>}
+                    {formattedPrice}
+                  </p>
                 </div>
                 <Link
                   href={`/product/${product.slug}`}

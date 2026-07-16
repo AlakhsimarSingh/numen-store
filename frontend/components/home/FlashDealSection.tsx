@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Zap } from "lucide-react";
 import { FlashDeal } from "@/src/lib/flashDeal";
-import { formatPrice } from "@/src/lib/utils";
+import { useProductPrice } from "@/src/hooks/useProductPrice";
 import { formatCountdown } from "@/src/lib/countdown";
 
 const ease = [0.16, 1, 0.3, 1] as const;
@@ -22,12 +22,14 @@ export default function FlashDealSection({ deal }: { deal: FlashDeal }) {
     return () => clearInterval(interval);
   }, [endTime]);
 
+  const { product } = deal;
+  const { price, compareAtPrice, formattedPrice, formattedCompareAt, estimated } = useProductPrice(product);
+
   if (remaining <= 0) return null;
 
-  const { product } = deal;
   const { hours, minutes, seconds } = formatCountdown(remaining);
-  const discountPercent = product.compareAtPrice
-    ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)
+  const discountPercent = compareAtPrice
+    ? Math.round(((compareAtPrice - price) / compareAtPrice) * 100)
     : 0;
 
   return (
@@ -39,31 +41,34 @@ export default function FlashDealSection({ deal }: { deal: FlashDeal }) {
         transition={{ duration: 0.6, ease }}
         className="relative overflow-hidden rounded-3xl border border-accent2/20 bg-gradient-to-br from-surface via-surface to-accent2/5"
       >
-        <div className="grid grid-cols-1 items-center gap-8 p-6 sm:p-10 md:grid-cols-[auto_1fr_auto]">
-          <div className="relative h-40 w-32 shrink-0 overflow-hidden rounded-2xl sm:h-52 sm:w-40">
+        <div className="flex flex-col items-center gap-6 p-6 text-center sm:p-10 md:flex-row md:items-center md:gap-8 md:text-left">
+          <div className="relative h-48 w-40 shrink-0 overflow-hidden rounded-2xl sm:h-52">
             <Image src={product.image} alt={product.name} fill sizes="200px" className="object-cover" />
           </div>
 
-          <div>
-            <div className="flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-accent2">
+          <div className="flex-1">
+            <div className="flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-widest text-accent2 md:justify-start">
               <Zap size={13} fill="currentColor" /> {deal.label}
             </div>
             <h2 className="mt-2 font-display text-2xl font-bold text-ink sm:text-3xl">{product.name}</h2>
-            <div className="mt-2 flex items-center gap-3">
-              <span className="font-mono text-xl text-ink">{formatPrice(product.price)}</span>
-              {product.compareAtPrice && (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-3 md:justify-start">
+              <span className="font-mono text-xl text-ink">
+                {estimated && <span className="text-muted">~</span>}
+                {formattedPrice}
+              </span>
+              {formattedCompareAt && (
                 <>
-                  <span className="font-mono text-sm text-muted line-through">
-                    {formatPrice(product.compareAtPrice)}
-                  </span>
-                  <span className="rounded-full bg-accent2/15 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-accent2">
-                    -{discountPercent}%
-                  </span>
+                  <span className="font-mono text-sm text-muted line-through">{formattedCompareAt}</span>
+                  {discountPercent > 0 && (
+                    <span className="rounded-full bg-accent2/15 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-accent2">
+                      -{discountPercent}%
+                    </span>
+                  )}
                 </>
               )}
             </div>
 
-            <div className="mt-5 flex items-center gap-2">
+            <div className="mt-5 flex items-center justify-center gap-2 md:justify-start">
               {[
                 { label: "HRS", value: hours },
                 { label: "MIN", value: minutes },
@@ -79,7 +84,7 @@ export default function FlashDealSection({ deal }: { deal: FlashDeal }) {
 
           <Link
             href={`/product/${product.slug}`}
-            className="shrink-0 rounded-full bg-accent px-7 py-3.5 text-center font-body text-sm font-semibold text-bg transition-transform hover:scale-105"
+            className="w-full shrink-0 rounded-full bg-accent px-7 py-3.5 text-center font-body text-sm font-semibold text-bg transition-transform hover:scale-105 md:w-auto"
           >
             Grab the Deal
           </Link>
