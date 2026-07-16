@@ -25,10 +25,10 @@ interface HeroProps {
  */
 function getHeadlineLineStyle(line: string): CSSProperties {
   const len = line.trim().length;
-  if (len <= 4) return { fontSize: "clamp(3.75rem, 4vw + 3rem, 8.5rem)" };
-  if (len <= 7) return { fontSize: "clamp(3.25rem, 4vw + 2.5rem, 7.5rem)" };
-  if (len <= 11) return { fontSize: "clamp(2.75rem, 3.5vw + 2rem, 6.5rem)" };
-  return { fontSize: "clamp(2.25rem, 3vw + 1.5rem, 5.5rem)" };
+  if (len <= 4) return { fontSize: "clamp(4.5rem, 5vw + 3.5rem, 10rem)" };
+  if (len <= 7) return { fontSize: "clamp(3.75rem, 4.5vw + 3rem, 8.75rem)" };
+  if (len <= 11) return { fontSize: "clamp(3.25rem, 4vw + 2.25rem, 7.5rem)" };
+  return { fontSize: "clamp(2.75rem, 3.5vw + 1.75rem, 6.25rem)" };
 }
 
 export default function Hero({ heroHeadlineLines, heroSubtext, heroImage, products }: HeroProps) {
