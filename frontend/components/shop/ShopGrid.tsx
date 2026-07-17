@@ -6,17 +6,13 @@ import { motion } from "framer-motion";
 import { SlidersHorizontal } from "lucide-react";
 import { Product } from "@/src/types";
 import { Category } from "@/src/lib/categories";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
+import { getDisplayPrice } from "@/src/lib/currency";
 import ProductCard from "@/components/ProductCard";
 import { cn } from "@/src/lib/utils";
+import { buildPriceBands } from "@/src/lib/priceBands";
 
 type SortKey = "featured" | "price-asc" | "price-desc" | "rating";
-
-const priceBands: { label: string; test: (p: number) => boolean }[] = [
-  { label: "All prices", test: () => true },
-  { label: "Under $30", test: (p) => p < 30 },
-  { label: "$30 – $60", test: (p) => p >= 30 && p <= 60 },
-  { label: "$60+", test: (p) => p > 60 },
-];
 
 export default function ShopGrid({
   initialProducts,
@@ -30,20 +26,46 @@ export default function ShopGrid({
   const searchParams = useSearchParams();
   const urlFilter = searchParams.get("filter");
 
+  const currency = useCurrencyStore((s) => s.currency);
+  const rates = useCurrencyStore((s) => s.rates);
+  const symbols = useCurrencyStore((s) => s.symbols);
+  const symbol = symbols[currency] ?? currency;
+
   const [sortBy, setSortBy] = useState<SortKey>("featured");
   const [activeCategory, setActiveCategory] = useState<string | "all">("all");
   const [priceBand, setPriceBand] = useState(0);
-  // Seeded from the URL on first render (?filter=new from "New Drops" in
-  // the navbar) — still a normal toggle the user can turn off afterward.
   const [newOnly, setNewOnly] = useState(urlFilter === "new");
 
-  // If the user navigates here again with a different ?filter= while
-  // already on the page (e.g. clicking "New Drops" from another shop
-  // page), reflect it — Next.js reuses the component instance across
-  // client-side navigations within the same route.
   useEffect(() => {
     if (urlFilter === "new") setNewOnly(true);
   }, [urlFilter]);
+
+  // Every product's price resolved to the currently displayed currency
+  // (regional override first, then rate conversion, INR fallback) — the
+  // single source of truth used for both band math and sorting below, so
+  // neither can drift out of sync with what the customer actually sees on
+  // each ProductCard.
+  const priceById = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const p of initialProducts) {
+      map[p.id] = getDisplayPrice(p, currency, rates).price;
+    }
+    return map;
+  }, [initialProducts, currency, rates]);
+
+  const priceBands = useMemo(
+    () => buildPriceBands(Object.values(priceById), currency, symbol),
+    [priceById, currency, symbol]
+  );
+
+  // Band thresholds are absolute numbers in the current currency — if the
+  // currency changes, a previously-selected index now points at a
+  // different, unrelated range (or may not exist at all if the band count
+  // changed). Reset to "All prices" rather than silently filtering by a
+  // stale cutoff.
+  useEffect(() => {
+    setPriceBand(0);
+  }, [currency]);
 
   const filtered = useMemo(() => {
     let list = [...initialProducts];
@@ -51,15 +73,21 @@ export default function ShopGrid({
     if (showCategoryFilter && activeCategory !== "all") {
       list = list.filter((p) => p.categorySlug === activeCategory);
     }
-    list = list.filter((p) => priceBands[priceBand].test(p.price));
+
+    const band = priceBands[priceBand] ?? priceBands[0];
+    list = list.filter((p) => {
+      const price = priceById[p.id] ?? 0;
+      return price >= band.min && (band.max === null || price < band.max);
+    });
+
     if (newOnly) list = list.filter((p) => p.isNew);
 
     switch (sortBy) {
       case "price-asc":
-        list.sort((a, b) => a.price - b.price);
+        list.sort((a, b) => (priceById[a.id] ?? 0) - (priceById[b.id] ?? 0));
         break;
       case "price-desc":
-        list.sort((a, b) => b.price - a.price);
+        list.sort((a, b) => (priceById[b.id] ?? 0) - (priceById[a.id] ?? 0));
         break;
       case "rating":
         list.sort((a, b) => b.rating - a.rating);
@@ -68,7 +96,7 @@ export default function ShopGrid({
         list.sort((a, b) => Number(b.isNew) - Number(a.isNew));
     }
     return list;
-  }, [initialProducts, sortBy, activeCategory, priceBand, newOnly, showCategoryFilter]);
+  }, [initialProducts, sortBy, activeCategory, priceBand, priceBands, priceById, newOnly, showCategoryFilter]);
 
   function resetFilters() {
     setActiveCategory("all");
