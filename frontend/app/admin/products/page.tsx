@@ -8,13 +8,12 @@ import { fetchCategories, type Category } from "@/src/lib/categories";
 import { fetchProducts, createProduct, updateProduct, deleteProduct } from "@/src/lib/products";
 import { uploadMedia, deleteMedia } from "@/src/lib/media";
 import { useToastStore } from "@/src/hooks/useToastStore";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { ColorOption, Product, VariantStockEntry } from "@/src/types";
 import { formatPrice, cn } from "@/src/lib/utils";
 import VariantsEditor from "@/components/admin/VariantsEditor";
 
 const ease = [0.16, 1, 0.3, 1] as const;
-
-type RegionalCode = "INR" | "EUR" | "GBP";
 
 type FormState = {
   name: string;
@@ -30,7 +29,7 @@ type FormState = {
   colors: ColorOption[];
   sizes: string[];
   variantStock: VariantStockEntry[];
-  regionalPrices: Partial<Record<RegionalCode, { price: string; compareAtPrice: string }>>;
+  regionalPrices: Record<string, { price: string; compareAtPrice: string }>;
 };
 
 const emptyForm: FormState = {
@@ -56,6 +55,18 @@ export default function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
   const showToast = useToastStore((s) => s.show);
 
+  const currencies = useCurrencyStore((s) => s.currencies);
+  const loadRates = useCurrencyStore((s) => s.loadRates);
+
+  // Regional pricing tab needs the live, admin-configured currency list —
+  // not a hardcoded set — so a currency added via Settings shows up here
+  // immediately without a code change.
+  const regionalCurrencies = useMemo(() => currencies.filter((c) => c.code !== "INR"), [currencies]);
+
+  useEffect(() => {
+    loadRates();
+  }, [loadRates]);
+
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
@@ -66,9 +77,6 @@ export default function AdminProductsPage() {
   const [uploadingMain, setUploadingMain] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
 
-  // Every file uploaded to Supabase during the current modal session, so we
-  // can delete anything that never ends up referenced by a saved product —
-  // storage is limited on the free tier and we don't want silent leaks.
   const pendingUploadsRef = useRef<{ url: string; path: string }[]>([]);
 
   function registerUpload(url: string, path: string) {
@@ -143,7 +151,6 @@ export default function AdminProductsPage() {
     setModalOpen(true);
   }
 
-  /** Modal dismissed without saving — clean up every upload made this session. */
   function handleModalDismiss() {
     const toDelete = pendingUploadsRef.current;
     pendingUploadsRef.current = [];
@@ -153,7 +160,6 @@ export default function AdminProductsPage() {
     setModalOpen(false);
   }
 
-  /** Modal closed because of a successful save — only clean up uploads that never made it into the final payload. */
   function cleanupUnusedUploadsAfterSave(payload: Record<string, unknown>) {
     const referenced = new Set<string>();
     const add = (u?: string | null) => {
@@ -231,9 +237,6 @@ export default function AdminProductsPage() {
       compareAtPrice: form.compareAtPrice ? parseFloat(form.compareAtPrice) : undefined,
       image: form.colors[0]?.images[0] || form.image,
       images: [form.image],
-      // Product-level video is only ever shown when there are no colors —
-      // ProductDetail falls back to per-color video otherwise. Clear it
-      // explicitly if colors exist so it doesn't linger unused in storage.
       video: hasColors ? null : form.video || undefined,
       stock: aggregateStock,
       isNew: form.isNew,
@@ -275,7 +278,7 @@ export default function AdminProductsPage() {
     }
   }
 
-  function updateRegionalField(code: RegionalCode, field: "price" | "compareAtPrice", value: string) {
+  function updateRegionalField(code: string, field: "price" | "compareAtPrice", value: string) {
     setForm((prev) => ({
       ...prev,
       regionalPrices: {
@@ -474,7 +477,7 @@ export default function AdminProductsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="mb-1.5 block font-body text-xs text-muted">Price (USD)</label>
+                      <label className="mb-1.5 block font-body text-xs text-muted">Price (₹ INR — base price)</label>
                       <input
                         type="number"
                         step="0.01"
@@ -485,7 +488,7 @@ export default function AdminProductsPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block font-body text-xs text-muted">Compare-at price (USD)</label>
+                      <label className="mb-1.5 block font-body text-xs text-muted">Compare-at price (₹ INR)</label>
                       <input
                         type="number"
                         step="0.01"
@@ -602,32 +605,41 @@ export default function AdminProductsPage() {
               {tab === "pricing" && (
                 <div className="space-y-4">
                   <p className="font-body text-xs text-muted">
-                    Set exact prices per currency. Leave blank to auto-estimate from the USD price using the site&apos;s
-                    fallback conversion rate (configured in Settings).
+                    Set exact prices per currency — these override the auto-converted price whenever a customer
+                    views the site in that currency. Leave blank to auto-estimate from the base ₹ price using the
+                    site&apos;s configured conversion rate (Settings → Currencies).
                   </p>
-                  {(["INR", "EUR", "GBP"] as const).map((code) => (
-                    <div key={code} className="rounded-xl border border-white/10 bg-bg p-3">
-                      <p className="mb-2 font-mono text-xs text-accent">{code}</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="Price"
-                          value={form.regionalPrices[code]?.price ?? ""}
-                          onChange={(e) => updateRegionalField(code, "price", e.target.value)}
-                          className="rounded-lg border border-white/10 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="Compare-at (optional)"
-                          value={form.regionalPrices[code]?.compareAtPrice ?? ""}
-                          onChange={(e) => updateRegionalField(code, "compareAtPrice", e.target.value)}
-                          className="rounded-lg border border-white/10 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
-                        />
+                  {regionalCurrencies.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-white/10 bg-bg p-4 font-body text-xs text-muted">
+                      No currencies configured yet. Add one under Settings → Currencies to set regional prices here.
+                    </p>
+                  ) : (
+                    regionalCurrencies.map((c) => (
+                      <div key={c.code} className="rounded-xl border border-white/10 bg-bg p-3">
+                        <p className="mb-2 font-mono text-xs text-accent">
+                          {c.code} <span className="text-muted">({c.symbol})</span>
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="Price"
+                            value={form.regionalPrices[c.code]?.price ?? ""}
+                            onChange={(e) => updateRegionalField(c.code, "price", e.target.value)}
+                            className="rounded-lg border border-white/10 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                          />
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="Compare-at (optional)"
+                            value={form.regionalPrices[c.code]?.compareAtPrice ?? ""}
+                            onChange={(e) => updateRegionalField(c.code, "compareAtPrice", e.target.value)}
+                            className="rounded-lg border border-white/10 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               )}
 

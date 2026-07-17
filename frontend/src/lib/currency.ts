@@ -42,14 +42,14 @@ export function getDisplayPrice(
   currency: CurrencyCode,
   rates: Record<string, number>
 ): { price: number; compareAtPrice?: number; estimated: boolean } {
-  if (currency === "INR") {
-    return { price: product.price, compareAtPrice: product.compareAtPrice, estimated: false };
-  }
-
   const explicit = product.regionalPrices?.[currency];
   if (explicit) {
     return { price: explicit.price, compareAtPrice: explicit.compareAtPrice, estimated: false };
   }
+  if (currency === "INR") {
+    return { price: product.price, compareAtPrice: product.compareAtPrice, estimated: false };
+  }
+
 
   const rate = rates[currency];
   if (!rate || rate <= 0) {

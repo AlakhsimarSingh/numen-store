@@ -21,15 +21,15 @@ export function getDisplayPriceServer(
   currency: string,
   rates: Record<string, number>
 ): { price: number; compareAtPrice?: number; estimated: boolean } {
+    const regional = product.regionalPrices as Record<string, RegionalPriceEntry> | null | undefined;
+    const explicit = regional?.[currency];
+    if (explicit) {
+      return { price: explicit.price, compareAtPrice: explicit.compareAtPrice, estimated: false };
+    }
   if (currency === "INR") {
     return { price: product.price, compareAtPrice: product.compareAtPrice ?? undefined, estimated: false };
   }
 
-  const regional = product.regionalPrices as Record<string, RegionalPriceEntry> | null | undefined;
-  const explicit = regional?.[currency];
-  if (explicit) {
-    return { price: explicit.price, compareAtPrice: explicit.compareAtPrice, estimated: false };
-  }
 
   const rate = rates[currency];
   if (!rate || rate <= 0) {
