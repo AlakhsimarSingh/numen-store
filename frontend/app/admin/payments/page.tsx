@@ -5,9 +5,19 @@ import { motion } from "framer-motion";
 import { Banknote, CreditCard, Loader2, Smartphone } from "lucide-react";
 import { fetchAllOrders } from "@/src/lib/adminOrders";
 import { Order, PaymentMethodId } from "@/src/lib/orders";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+// Order totals/revenue here are always the raw INR amounts recorded at
+// checkout — independent of `formatPrice`'s site-wide display currency,
+// which follows the customer-facing currency selector.
+const formatBasePriceINR = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
 
 const methodMeta: Record<PaymentMethodId, { label: string; icon: typeof CreditCard }> = {
   card: { label: "Card", icon: CreditCard },
@@ -63,7 +73,7 @@ export default function AdminPaymentsPage() {
                 <Icon size={16} className="text-accent" />
                 <span className="font-body text-sm text-ink">{meta.label}</span>
               </div>
-              <p className="mt-3 font-display text-2xl font-bold text-ink">{formatPrice(revenue)}</p>
+              <p className="mt-3 font-display text-2xl font-bold text-ink">{formatBasePriceINR(revenue)}</p>
               <p className="mt-1 font-body text-xs text-muted">{count} transaction{count !== 1 ? "s" : ""}</p>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/5">
                 <div className="h-full rounded-full bg-accent" style={{ width: `${percent}%` }} />
@@ -91,7 +101,7 @@ export default function AdminPaymentsPage() {
                 <span className={cn("w-fit rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest", statusMeta[o.paymentStatus])}>
                   {o.paymentStatus}
                 </span>
-                <span className="font-mono text-sm text-ink">{formatPrice(o.total)}</span>
+                <span className="font-mono text-sm text-ink">{formatBasePriceINR(o.total)}</span>
                 <span className="font-body text-xs text-muted">
                   {new Date(o.placedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                 </span>

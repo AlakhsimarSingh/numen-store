@@ -7,9 +7,19 @@ import { Check, Loader2, Package, RotateCcw, Truck, X } from "lucide-react";
 import { fetchAllOrders, updateOrderStatusAdmin, updateReturnDecision } from "@/src/lib/adminOrders";
 import { Order, OrderStatus } from "@/src/lib/orders";
 import { useToastStore } from "@/src/hooks/useToastStore";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+// Order totals and line-item prices here are always the raw INR amounts
+// recorded at checkout — independent of `formatPrice`'s site-wide display
+// currency, which follows the customer-facing currency selector.
+const formatBasePriceINR = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
 
 const statusColors: Record<OrderStatus, string> = {
   processing: "text-accent bg-accent/10",
@@ -90,7 +100,7 @@ export default function AdminOrdersPage() {
               <span className="font-body text-xs text-muted">
                 {new Date(o.placedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
               </span>
-              <span className="font-mono text-sm text-ink">{formatPrice(o.total)}</span>
+              <span className="font-mono text-sm text-ink">{formatBasePriceINR(o.total)}</span>
               <span className={cn("w-fit rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest", statusColors[o.status])}>
                 {o.status}
               </span>
@@ -167,7 +177,7 @@ export default function AdminOrdersPage() {
                     <p className="truncate font-body text-sm text-ink">{item.name}</p>
                     <p className="font-mono text-xs text-muted">Qty {item.qty}</p>
                   </div>
-                  <span className="font-mono text-sm text-ink">{formatPrice(item.price * item.qty)}</span>
+                  <span className="font-mono text-sm text-ink">{formatBasePriceINR(item.price * item.qty)}</span>
                 </div>
               ))}
             </div>
@@ -182,7 +192,7 @@ export default function AdminOrdersPage() {
 
             <div className="mt-4 flex justify-between border-t border-white/5 pt-4 font-mono text-sm">
               <span className="text-muted">Total</span>
-              <span className="text-ink">{formatPrice(selected.total)}</span>
+              <span className="text-ink">{formatBasePriceINR(selected.total)}</span>
             </div>
           </motion.div>
         </div>

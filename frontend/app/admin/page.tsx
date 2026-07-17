@@ -20,9 +20,19 @@ import {
 import StatCard from "@/components/admin/StatCard";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { fetchAdminDashboard, DashboardData } from "@/src/lib/adminDashboard";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+// Revenue and order totals here are always the raw INR amounts recorded at
+// checkout — independent of `formatPrice`'s site-wide display currency,
+// which follows the customer-facing currency selector.
+const formatBasePriceINR = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
 
 const statusLabels: Record<string, string> = {
   processing: "Processing",
@@ -71,7 +81,7 @@ export default function AdminDashboard() {
       </motion.div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Total Revenue" value={formatPrice(data.revenue)} icon={DollarSign} />
+        <StatCard label="Total Revenue" value={formatBasePriceINR(data.revenue)} icon={DollarSign} />
         <StatCard label="Orders" value={String(data.ordersCount)} icon={Package} />
         <StatCard label="Products" value={String(data.productsCount)} icon={ShoppingBag} />
         <StatCard
@@ -124,7 +134,7 @@ export default function AdminDashboard() {
                       {o.itemsCount} item{o.itemsCount !== 1 ? "s" : ""} · {statusLabels[o.status]}
                     </p>
                   </div>
-                  <span className="font-mono text-sm text-ink">{formatPrice(o.total)}</span>
+                  <span className="font-mono text-sm text-ink">{formatBasePriceINR(o.total)}</span>
                 </div>
               ))}
             </div>
