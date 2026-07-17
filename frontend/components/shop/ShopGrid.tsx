@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { SlidersHorizontal } from "lucide-react";
 import { Product } from "@/src/types";
-import { categories } from "@/src/data/categories";
+import { Category } from "@/src/lib/categories";
 import ProductCard from "@/components/ProductCard";
 import { cn } from "@/src/lib/utils";
 
@@ -19,15 +20,30 @@ const priceBands: { label: string; test: (p: number) => boolean }[] = [
 
 export default function ShopGrid({
   initialProducts,
+  categories = [],
   showCategoryFilter = false,
 }: {
   initialProducts: Product[];
+  categories?: Category[];
   showCategoryFilter?: boolean;
 }) {
+  const searchParams = useSearchParams();
+  const urlFilter = searchParams.get("filter");
+
   const [sortBy, setSortBy] = useState<SortKey>("featured");
   const [activeCategory, setActiveCategory] = useState<string | "all">("all");
   const [priceBand, setPriceBand] = useState(0);
-  const [newOnly, setNewOnly] = useState(false);
+  // Seeded from the URL on first render (?filter=new from "New Drops" in
+  // the navbar) — still a normal toggle the user can turn off afterward.
+  const [newOnly, setNewOnly] = useState(urlFilter === "new");
+
+  // If the user navigates here again with a different ?filter= while
+  // already on the page (e.g. clicking "New Drops" from another shop
+  // page), reflect it — Next.js reuses the component instance across
+  // client-side navigations within the same route.
+  useEffect(() => {
+    if (urlFilter === "new") setNewOnly(true);
+  }, [urlFilter]);
 
   const filtered = useMemo(() => {
     let list = [...initialProducts];
@@ -62,6 +78,15 @@ export default function ShopGrid({
 
   return (
     <div>
+      {newOnly && (
+        <div className="mb-4 flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 font-body text-xs text-accent w-fit">
+          <span>Showing New Drops</span>
+          <button onClick={() => setNewOnly(false)} className="font-semibold hover:underline">
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="mb-6 flex flex-col gap-4 border-b border-white/5 pb-6">
         {showCategoryFilter && (
