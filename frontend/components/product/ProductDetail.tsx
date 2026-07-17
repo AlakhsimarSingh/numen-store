@@ -77,13 +77,21 @@ export default function ProductDetail({
       
       useEffect(() => setActiveMedia(0), [selectedColor]);
 
+  // Both axes need the same fallback the admin's VariantsEditor.rebuildMatrix
+  // uses when storing data: a product with no real colors is keyed under
+  // "Default", a product with no real sizes is keyed under "One Size". Also
+  // guards against product.variantStock being null/undefined entirely
+  // (plain products with no variants at all) — calling .find() on that
+  // would throw.
   const variantStock = useMemo(() => {
     if (!product.variantStock) return null;
+    const effectiveColorKey = hasRealColors ? selectedColor : "Default";
+    const effectiveSizeKey = sizes.length > 0 ? selectedSize : "One Size";
     const entry = product.variantStock.find(
-      (v) => (v.color === selectedColor || (!hasRealColors && v.color === "Default")) && v.size === selectedSize
+      (v) => v.color === effectiveColorKey && v.size === effectiveSizeKey
     );
     return entry ? entry.stock : 0;
-  }, [product.variantStock, selectedColor, selectedSize, hasRealColors]);
+  }, [product.variantStock, selectedColor, selectedSize, hasRealColors, sizes.length]);
 
   const effectiveStock = variantStock !== null ? variantStock : product.stock;
   const outOfStock = effectiveStock === 0;
@@ -219,8 +227,9 @@ export default function ProductDetail({
               </div>
               <div className="flex flex-wrap gap-2">
                 {sizes.map((sz) => {
+                  const effectiveColorKey = hasRealColors ? selectedColor : "Default";
                   const stockForSize = product.variantStock?.find(
-                    (v) => (v.color === selectedColor || (!hasRealColors && v.color === "Default")) && v.size === sz
+                    (v) => v.color === effectiveColorKey && v.size === sz
                   )?.stock;
                   const disabled = stockForSize === 0;
                   return (

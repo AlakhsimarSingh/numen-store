@@ -103,11 +103,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     body.sizes !== undefined ||
     body.variantStock !== undefined
   ) {
+    const finalColors = (data.colors ?? existing.colors) as unknown[];
+    const finalSizes = (data.sizes ?? existing.sizes) as string[];
+    const hasVariants = (finalColors?.length ?? 0) > 0 || (finalSizes?.length ?? 0) > 0;
+
+    // Server is authoritative here, not just "if the client happened to
+    // send variantStock": if colors/sizes were just cleared, variantStock
+    // MUST be cleared too, even if the request omitted the key entirely
+    // (which it does whenever hasVariants becomes false on the admin
+    // form) — otherwise a stale variantStock blob from before the edit
+    // silently survives in the DB and causes every future lookup for this
+    // product to mismatch against its current (empty) colors/sizes.
+    data.variantStock = hasVariants ? (data.variantStock ?? existing.variantStock) : null;
+
     data.stock = computeStock({
       stock: body.stock !== undefined ? Number(body.stock) : existing.stock,
-      colors: (data.colors ?? existing.colors) as unknown[],
-      sizes: (data.sizes ?? existing.sizes) as string[],
-      variantStock: (data.variantStock ?? existing.variantStock) as never,
+      colors: finalColors,
+      sizes: finalSizes,
+      variantStock: data.variantStock as never,
     });
   }
 
