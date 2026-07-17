@@ -10,10 +10,20 @@ import { uploadMedia, deleteMedia } from "@/src/lib/media";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { ColorOption, Product, VariantStockEntry } from "@/src/types";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
 import VariantsEditor from "@/components/admin/VariantsEditor";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+// Admin's product list always shows the raw base price the admin entered,
+// which is always INR — regardless of `formatPrice`'s site-wide display
+// currency (which follows the customer-facing currency selector).
+const formatBasePriceINR = (value: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
 
 type FormState = {
   name: string;
@@ -374,7 +384,7 @@ export default function AdminProductsPage() {
                   </div>
                 </div>
                 <span className="font-body text-xs text-muted lg:text-sm">{cat?.name ?? p.categorySlug}</span>
-                <span className="font-mono text-sm text-ink">{formatPrice(p.price)}</span>
+                <span className="font-mono text-sm text-ink">{formatBasePriceINR(p.price)}</span>
                 <span
                   className={cn(
                     "font-mono text-xs",
