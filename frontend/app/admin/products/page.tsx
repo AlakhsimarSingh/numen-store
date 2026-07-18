@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Loader2, Pencil, Plus, Search, Trash2, UploadCloud, X } from "lucide-react";
+import { Loader2, Pencil, Plus, Search, Star, Trash2, UploadCloud, X } from "lucide-react";
 import { fetchCategories, type Category } from "@/src/lib/categories";
 import { fetchProducts, createProduct, updateProduct, deleteProduct } from "@/src/lib/products";
 import { uploadMedia, deleteMedia } from "@/src/lib/media";
@@ -12,12 +12,10 @@ import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { ColorOption, Product, VariantStockEntry } from "@/src/types";
 import { cn } from "@/src/lib/utils";
 import VariantsEditor from "@/components/admin/VariantsEditor";
+import { useRouter } from "next/navigation";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-// Admin's product list always shows the raw base price the admin entered,
-// which is always INR — regardless of `formatPrice`'s site-wide display
-// currency (which follows the customer-facing currency selector).
 const formatBasePriceINR = (value: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -30,7 +28,9 @@ type FormState = {
   categorySlug: string;
   price: string;
   compareAtPrice: string;
-  image: string;
+  image: string; // main — required
+  hoverImage: string; // shown on card hover
+  thirdImage: string; // shown in product page gallery only
   video: string;
   stock: string;
   isNew: boolean;
@@ -48,6 +48,8 @@ const emptyForm: FormState = {
   price: "",
   compareAtPrice: "",
   image: "",
+  hoverImage: "",
+  thirdImage: "",
   video: "",
   stock: "",
   isNew: false,
@@ -59,6 +61,66 @@ const emptyForm: FormState = {
   regionalPrices: {},
 };
 
+
+type ImageSlotKey = "image" | "hoverImage" | "thirdImage";
+
+function ImageSlot({
+  label,
+  hint,
+  required,
+  value,
+  uploading,
+  onUpload,
+  onClear,
+}: {
+  label: string;
+  hint: string;
+  required?: boolean;
+  value: string;
+  uploading: boolean;
+  onUpload: (file: File | undefined) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="font-body text-xs text-muted">
+          {label} {required && <span className="text-accent2">*</span>}
+        </label>
+      </div>
+
+      {value ? (
+        <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-white/10 bg-surface2">
+          <Image src={value} alt={label} fill sizes="200px" className="object-cover" />
+          <button
+            type="button"
+            onClick={onClear}
+            className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-bg/80 text-ink backdrop-blur-sm hover:text-accent2"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      ) : (
+        <label className="flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-bg text-muted hover:border-accent/40 hover:text-accent">
+          {uploading ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
+          <span className="font-mono text-[10px] uppercase tracking-wide">Upload</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              onUpload(file);
+            }}
+          />
+        </label>
+      )}
+      <p className="mt-1 font-body text-[10px] leading-snug text-muted">{hint}</p>
+    </div>
+  );
+}
+
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -67,10 +129,6 @@ export default function AdminProductsPage() {
 
   const currencies = useCurrencyStore((s) => s.currencies);
   const loadRates = useCurrencyStore((s) => s.loadRates);
-
-  // Regional pricing tab needs the live, admin-configured currency list —
-  // not a hardcoded set — so a currency added via Settings shows up here
-  // immediately without a code change.
   const regionalCurrencies = useMemo(() => currencies.filter((c) => c.code !== "INR"), [currencies]);
 
   useEffect(() => {
@@ -84,8 +142,11 @@ export default function AdminProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [uploadingMain, setUploadingMain] = useState(false);
+  const [uploadingSlot, setUploadingSlot] = useState<ImageSlotKey | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const router = useRouter();
 
   const pendingUploadsRef = useRef<{ url: string; path: string }[]>([]);
 
@@ -104,9 +165,7 @@ export default function AdminProductsPage() {
           setCategories(categoriesData);
         }
       } catch (err) {
-        if (!cancelled) {
-          showToast(err instanceof Error ? err.message : "Failed to load data", "error");
-        }
+        if (!cancelled) showToast(err instanceof Error ? err.message : "Failed to load data", "error");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -142,6 +201,8 @@ export default function AdminProductsPage() {
       price: String(p.price),
       compareAtPrice: p.compareAtPrice ? String(p.compareAtPrice) : "",
       image: p.image,
+      hoverImage: p.images?.[0] ?? "",
+      thirdImage: p.images?.[1] ?? "",
       video: p.video ?? "",
       stock: String(p.stock),
       isNew: p.isNew,
@@ -164,9 +225,7 @@ export default function AdminProductsPage() {
   function handleModalDismiss() {
     const toDelete = pendingUploadsRef.current;
     pendingUploadsRef.current = [];
-    toDelete.forEach((u) => {
-      deleteMedia(u.path);
-    });
+    toDelete.forEach((u) => deleteMedia(u.path));
     setModalOpen(false);
   }
 
@@ -185,23 +244,21 @@ export default function AdminProductsPage() {
 
     const leftover = pendingUploadsRef.current.filter((u) => !referenced.has(u.url));
     pendingUploadsRef.current = [];
-    leftover.forEach((u) => {
-      deleteMedia(u.path);
-    });
+    leftover.forEach((u) => deleteMedia(u.path));
   }
 
-  async function handleUpload(file: File | undefined, onDone: (url: string) => void) {
+  async function handleSlotUpload(slot: ImageSlotKey, file: File | undefined) {
     if (!file) return;
-    setUploadingMain(true);
+    setUploadingSlot(slot);
     try {
       const { url, path } = await uploadMedia(file);
       registerUpload(url, path);
-      onDone(url);
-      showToast("File uploaded");
+      setForm((f) => ({ ...f, [slot]: url }));
+      showToast("Image uploaded");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Upload failed", "error");
     } finally {
-      setUploadingMain(false);
+      setUploadingSlot(null);
     }
   }
 
@@ -240,13 +297,16 @@ export default function AdminProductsPage() {
         ])
     );
 
+    // Main image + up to two extras (hover, then a third gallery-only shot).
+    const images = [form.hoverImage, form.thirdImage].filter(Boolean);
+
     const payload = {
       name: form.name,
       categorySlug: form.categorySlug,
       price: parseFloat(form.price),
       compareAtPrice: form.compareAtPrice ? parseFloat(form.compareAtPrice) : undefined,
-      image: form.colors[0]?.images[0] || form.image,
-      images: [form.image],
+      image: form.image,
+      images,
       video: hasColors ? null : form.video || undefined,
       stock: aggregateStock,
       isNew: form.isNew,
@@ -316,12 +376,41 @@ export default function AdminProductsPage() {
           <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">Products</h1>
           <p className="mt-1 font-body text-sm text-muted">{products.length} total products</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
-        >
-          <Plus size={16} /> Add Product
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setAddMenuOpen((v) => !v)}
+            className="flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
+          >
+            <Plus size={16} /> Add Product
+          </button>
+          {addMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setAddMenuOpen(false)} />
+              <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-2xl">
+                <button
+                  onClick={() => {
+                    setAddMenuOpen(false);
+                    openAdd();
+                  }}
+                  className="block w-full px-4 py-3 text-left font-body text-sm text-ink hover:bg-surface2"
+                >
+                  <span className="block">Single Product</span>
+                  <span className="block font-mono text-[10px] text-muted">Full details, one at a time</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setAddMenuOpen(false);
+                    router.push("/admin/products/bulk-import");
+                  }}
+                  className="block w-full border-t border-white/5 px-4 py-3 text-left font-body text-sm text-ink hover:bg-surface2"
+                >
+                  <span className="block">Bulk Upload</span>
+                  <span className="block font-mono text-[10px] text-muted">Import many at once from a folder</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -348,66 +437,83 @@ export default function AdminProductsPage() {
         </select>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-white/5 bg-surface">
-        <div className="hidden grid-cols-[1fr_120px_100px_100px_100px] gap-4 border-b border-white/5 px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-muted lg:grid">
-          <span>Product</span>
-          <span>Category</span>
-          <span>Price</span>
-          <span>Stock</span>
-          <span className="text-right">Actions</span>
-        </div>
-        <div className="divide-y divide-white/5">
-          {filtered.map((p) => {
-            const cat = categories.find((c) => c.slug === p.categorySlug);
-            return (
-              <div
-                key={p.id}
-                className="flex flex-col gap-3 px-5 py-4 lg:grid lg:grid-cols-[1fr_120px_100px_100px_100px] lg:items-center lg:gap-4"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative h-14 w-12 shrink-0 overflow-hidden rounded-lg bg-surface2">
-                    <Image src={p.image} alt={p.name} fill sizes="48px" className="object-cover" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-body text-sm text-ink">{p.name}</p>
-                    <div className="flex items-center gap-2">
-                      {p.isNew && <span className="font-mono text-[10px] text-accent">New</span>}
-                      {p.isSpotlight && <span className="font-mono text-[10px] text-accent2">★ Spotlight</span>}
-                      {p.colors?.length || p.sizes?.length ? (
-                        <span className="font-mono text-[10px] text-muted">
-                          {p.colors?.length ? `${p.colors.length} colors` : ""}
-                          {p.colors?.length && p.sizes?.length ? " · " : ""}
-                          {p.sizes?.length ? `${p.sizes.length} sizes` : ""}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <span className="font-body text-xs text-muted lg:text-sm">{cat?.name ?? p.categorySlug}</span>
-                <span className="font-mono text-sm text-ink">{formatBasePriceINR(p.price)}</span>
-                <span
-                  className={cn(
-                    "font-mono text-xs",
-                    p.stock === 0 ? "text-accent2" : p.stock <= 5 ? "text-accent" : "text-muted"
+      {/* Card grid — image-forward, readable at a glance, same layout logic on mobile and desktop (just fewer columns) */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+        {filtered.map((p) => {
+          const cat = categories.find((c) => c.slug === p.categorySlug);
+          const outOfStock = p.stock === 0;
+          const lowStock = p.stock > 0 && p.stock <= 5;
+          return (
+            <div
+              key={p.id}
+              className="group overflow-hidden rounded-2xl border border-white/5 bg-surface transition-colors hover:border-white/10"
+            >
+              <div className="relative aspect-square bg-surface2">
+                <Image src={p.image} alt={p.name} fill sizes="(max-width: 640px) 50vw, 240px" className="object-cover" />
+
+                <div className="absolute left-2 top-2 flex flex-col gap-1">
+                  {p.isNew && (
+                    <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[9px] font-semibold uppercase text-bg">
+                      New
+                    </span>
                   )}
-                >
-                  {p.stock === 0 ? "Out of stock" : `${p.stock} in stock`}
-                </span>
-                <div className="flex items-center gap-3 lg:justify-end">
-                  <button onClick={() => openEdit(p)} className="text-muted hover:text-accent">
-                    <Pencil size={15} />
+                  {p.isSpotlight && (
+                    <span className="flex items-center gap-0.5 rounded-full bg-accent2 px-2 py-0.5 font-mono text-[9px] font-semibold uppercase text-ink">
+                      <Star size={8} className="fill-current" /> Spotlight
+                    </span>
+                  )}
+                </div>
+
+                {(outOfStock || lowStock) && (
+                  <span
+                    className={cn(
+                      "absolute bottom-2 left-2 rounded-full px-2 py-0.5 font-mono text-[9px] uppercase backdrop-blur-sm",
+                      outOfStock ? "bg-accent2/90 text-ink" : "bg-bg/80 text-accent"
+                    )}
+                  >
+                    {outOfStock ? "Out of stock" : `${p.stock} left`}
+                  </span>
+                )}
+
+                {/* Actions: always visible on touch devices (no hover), fade in on desktop hover */}
+                <div className="absolute right-2 top-2 flex gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <button
+                    onClick={() => openEdit(p)}
+                    aria-label="Edit"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-bg/85 text-ink backdrop-blur-sm hover:text-accent"
+                  >
+                    <Pencil size={13} />
                   </button>
-                  <button onClick={() => handleDelete(p.id, p.name)} className="text-muted hover:text-accent2">
-                    <Trash2 size={15} />
+                  <button
+                    onClick={() => handleDelete(p.id, p.name)}
+                    aria-label="Delete"
+                    className="flex h-7 w-7 items-center justify-center rounded-full bg-bg/85 text-ink backdrop-blur-sm hover:text-accent2"
+                  >
+                    <Trash2 size={13} />
                   </button>
                 </div>
               </div>
-            );
-          })}
-          {filtered.length === 0 && (
-            <p className="px-5 py-10 text-center font-body text-sm text-muted">No products match your filters.</p>
-          )}
-        </div>
+
+              <div className="p-2.5 sm:p-3">
+                <p className="truncate font-body text-xs text-ink sm:text-sm">{p.name}</p>
+                <p className="mt-0.5 truncate font-mono text-[10px] text-muted">{cat?.name ?? p.categorySlug}</p>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="font-mono text-xs text-ink sm:text-sm">{formatBasePriceINR(p.price)}</span>
+                  {(p.colors?.length || p.sizes?.length) ? (
+                    <span className="font-mono text-[9px] text-muted">
+                      {p.colors?.length ? `${p.colors.length}c` : ""}
+                      {p.colors?.length && p.sizes?.length ? " · " : ""}
+                      {p.sizes?.length ? `${p.sizes.length}s` : ""}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {filtered.length === 0 && (
+          <p className="col-span-full py-14 text-center font-body text-sm text-muted">No products match your filters.</p>
+        )}
       </div>
 
       {modalOpen && (
@@ -509,31 +615,36 @@ export default function AdminProductsPage() {
                       />
                     </div>
                   </div>
+
                   <div>
-                    <label className="mb-1.5 block font-body text-xs text-muted">Fallback image</label>
-                    <div className="flex gap-2">
-                      <input
+                    <p className="mb-1.5 font-body text-xs text-muted">Product images</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <ImageSlot
+                        label="Main"
+                        required
+                        hint="Shown on the product card and as the default gallery image."
                         value={form.image}
-                        onChange={(e) => setForm({ ...form, image: e.target.value })}
-                        placeholder="https://…"
-                        className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                        uploading={uploadingSlot === "image"}
+                        onUpload={(f) => handleSlotUpload("image", f)}
+                        onClear={() => setForm((f) => ({ ...f, image: "" }))}
                       />
-                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-white/10 bg-bg px-3 py-2.5 font-body text-xs text-muted hover:text-accent">
-                        {uploadingMain ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-                        Upload
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            e.target.value = "";
-                            handleUpload(file, (url) => setForm((f) => ({ ...f, image: url })));
-                          }}
-                        />
-                      </label>
+                      <ImageSlot
+                        label="Hover"
+                        hint="Flashes in when a shopper hovers the product card."
+                        value={form.hoverImage}
+                        uploading={uploadingSlot === "hoverImage"}
+                        onUpload={(f) => handleSlotUpload("hoverImage", f)}
+                        onClear={() => setForm((f) => ({ ...f, hoverImage: "" }))}
+                      />
+                      <ImageSlot
+                        label="Third"
+                        hint="Extra shot shown only in the product page gallery."
+                        value={form.thirdImage}
+                        uploading={uploadingSlot === "thirdImage"}
+                        onUpload={(f) => handleSlotUpload("thirdImage", f)}
+                        onClear={() => setForm((f) => ({ ...f, thirdImage: "" }))}
+                      />
                     </div>
-                    <p className="mt-1 font-body text-[11px] text-muted">Used if no color images are set below.</p>
                   </div>
 
                   {form.colors.length === 0 && (

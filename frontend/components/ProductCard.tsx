@@ -1,21 +1,23 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { Heart, Plus } from "lucide-react";
 import { Product } from "@/src/types";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useWishlistStore } from "@/src/hooks/useWishlistStore";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { useProductPrice } from "@/src/hooks/useProductPrice";
+
 export default function ProductCard({ product }: { product: Product }) {
   const ref = useRef<HTMLDivElement>(null);
   const addItem = useCartStore((s) => s.addItem);
   const wishlisted = useWishlistStore((s) => s.has(product.id));
   const toggleWishlist = useWishlistStore((s) => s.toggle);
+  const [isHovering, setIsHovering] = useState(false);
 
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -24,6 +26,9 @@ export default function ProductCard({ product }: { product: Product }) {
   const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-8, 8]), { stiffness: 200, damping: 20 });
   const showToast = useToastStore((s) => s.show);
   const { formattedPrice, formattedCompareAt, estimated } = useProductPrice(product);
+
+  const hoverImage = product.images?.[0];
+
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     const rect = ref.current?.getBoundingClientRect();
     if (!rect) return;
@@ -31,9 +36,14 @@ export default function ProductCard({ product }: { product: Product }) {
     y.set((e.clientY - rect.top) / rect.height - 0.5);
   }
 
+  function handleMouseEnter() {
+    setIsHovering(true);
+  }
+
   function handleMouseLeave() {
     x.set(0);
     y.set(0);
+    setIsHovering(false);
   }
 
   const lowStock = product.stock > 0 && product.stock <= 5;
@@ -43,6 +53,7 @@ export default function ProductCard({ product }: { product: Product }) {
     <motion.div
       ref={ref}
       onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       style={{ rotateX, rotateY, transformPerspective: 800 }}
       className="group relative rounded-2xl border border-white/5 bg-surface p-3"
@@ -54,8 +65,23 @@ export default function ProductCard({ product }: { product: Product }) {
             alt={product.name}
             fill
             sizes="(max-width: 768px) 50vw, 25vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className={cn(
+              "object-cover transition-opacity duration-200",
+              hoverImage && isHovering ? "opacity-0" : "opacity-100"
+            )}
           />
+          {hoverImage && (
+            <Image
+              src={hoverImage}
+              alt=""
+              fill
+              sizes="(max-width: 768px) 50vw, 25vw"
+              className={cn(
+                "absolute inset-0 object-cover transition-opacity duration-200",
+                isHovering ? "opacity-100" : "opacity-0"
+              )}
+            />
+          )}
 
           <div className="absolute left-2 top-2 flex flex-col gap-1.5">
             {product.isNew && (

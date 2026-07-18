@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Minus, Plus, ShieldCheck, Truck } from "lucide-react";
 import { Product } from "@/src/types";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useRecentlyViewedStore } from "@/src/hooks/useRecentlyViewedStore";
 import { useToastStore } from "@/src/hooks/useToastStore";
+import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import { computeRatingSummary, fetchProductReviews, Review } from "@/src/lib/reviews";
 import { StarRatingDisplay } from "./StarRating";
 import SizeGuideModal from "./SizeGuideModal";
@@ -38,6 +39,7 @@ export default function ProductDetail({
   const addItem = useCartStore((s) => s.addItem);
   const showToast = useToastStore((s) => s.show);
   const addView = useRecentlyViewedStore((s) => s.addView);
+  const freeShippingThreshold = useSiteSettingsStore((s) => s.freeShippingThreshold);
 
   useEffect(() => {
     addView(product.id);
@@ -68,14 +70,40 @@ export default function ProductDetail({
   const { formattedPrice, formattedCompareAt, estimated } = useProductPrice(product);
 
   const activeColorObj = colors.find((c) => c.name === selectedColor);
-  const gallery: { type: "image" | "video"; src: string }[] = activeColorObj
-    ? [...activeColorObj.images.map((img) => ({ type: "image" as const, src: img })), ...(activeColorObj.video ? [{ type: "video" as const, src: activeColorObj.video }] : [])]
-    : [product.image, ...product.images, ...(product.video ? [product.video] : [])].map((src, i, arr) => ({
-        type: (product.video && i === arr.length - 1 ? "video" : "image") as "image" | "video",
-        src,
-      }));
-      
-      useEffect(() => setActiveMedia(0), [selectedColor]);
+
+  // Memoized so the array reference stays stable across unrelated re-renders
+  // (qty changes, add-to-cart toast, reviews loading, etc.) — otherwise the
+  // autoplay effect below (which depends on `gallery`) would restart its
+  // 4s timer on every unrelated render instead of only when the actual
+  // media set changes.
+  const gallery = useMemo<{ type: "image" | "video"; src: string }[]>(
+    () =>
+      activeColorObj
+        ? [
+            ...activeColorObj.images.map((img) => ({ type: "image" as const, src: img })),
+            ...(activeColorObj.video ? [{ type: "video" as const, src: activeColorObj.video }] : []),
+          ]
+        : [product.image, ...product.images, ...(product.video ? [product.video] : [])].map((src, i, arr) => ({
+            type: (product.video && i === arr.length - 1 ? "video" : "image") as "image" | "video",
+            src,
+          })),
+    [activeColorObj, product.image, product.images, product.video]
+  );
+
+  useEffect(() => setActiveMedia(0), [selectedColor]);
+
+  const [autoplayPaused, setAutoplayPaused] = useState(false);
+
+  // Auto-advance through gallery images every 4s — pauses on hover so
+  // shoppers can linger, and never auto-advances away from a playing video.
+  useEffect(() => {
+    if (gallery.length <= 1 || autoplayPaused) return;
+    if (gallery[activeMedia]?.type === "video") return;
+    const timer = setTimeout(() => {
+      setActiveMedia((i) => (i + 1) % gallery.length);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [activeMedia, gallery, autoplayPaused]);
 
   // Both axes need the same fallback the admin's VariantsEditor.rebuildMatrix
   // uses when storing data: a product with no real colors is keyed under
@@ -123,52 +151,67 @@ export default function ProductDetail({
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease }}>
-          <div className="relative aspect-[3/4] overflow-hidden rounded-3xl bg-surface2">
-            {gallery[activeMedia]?.type === "video" ? (
-              <video
-                key={gallery[activeMedia].src}
-                src={gallery[activeMedia].src}
-                controls
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <Image
-                src={gallery[activeMedia]?.src ?? product.image}
-                alt={product.name}
-                fill
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="object-cover"
-                priority
-              />
-            )}
+          <div
+            className="relative aspect-[3/4] overflow-hidden rounded-3xl bg-surface2"
+            onMouseEnter={() => setAutoplayPaused(true)}
+            onMouseLeave={() => setAutoplayPaused(false)}
+          >
+            <AnimatePresence mode="wait">
+              {gallery[activeMedia]?.type === "video" ? (
+                <motion.video
+                  key={gallery[activeMedia].src}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.35, ease }}
+                  src={gallery[activeMedia].src}
+                  controls
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <motion.div
+                  key={gallery[activeMedia]?.src ?? "fallback"}
+                  initial={{ opacity: 0, scale: 1.02 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.45, ease }}
+                  className="absolute inset-0"
+                >
+                  <Image
+                    src={gallery[activeMedia]?.src ?? product.image}
+                    alt={product.name}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="object-cover"
+                    priority
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {product.isNew && (
-              <span className="absolute left-4 top-4 rounded-full bg-accent px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-bg">New</span>
+              <span className="absolute left-4 top-4 z-10 rounded-full bg-accent px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-bg">New</span>
             )}
             {product.compareAtPrice && (
-              <span className="absolute right-4 top-4 rounded-full bg-accent2 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-ink">Sale</span>
+              <span className="absolute right-4 top-4 z-10 rounded-full bg-accent2 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-ink">Sale</span>
+            )}
+
+            {gallery.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                {gallery.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveMedia(i)}
+                    aria-label={`Go to image ${i + 1}`}
+                    className={cn(
+                      "h-1.5 rounded-full bg-bg/60 backdrop-blur-sm transition-all",
+                      i === activeMedia ? "w-6 bg-accent" : "w-1.5 hover:bg-bg/90"
+                    )}
+                  />
+                ))}
+              </div>
             )}
           </div>
-
-          {gallery.length > 1 && (
-            <div className="mt-4 flex gap-3">
-              {gallery.map((m, i) => (
-                <button
-                  key={`${m.src}-${i}`}
-                  onClick={() => setActiveMedia(i)}
-                  className={cn(
-                    "relative h-20 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition-colors",
-                    activeMedia === i ? "border-accent" : "border-transparent"
-                  )}
-                >
-                  {m.type === "video" ? (
-                    <video src={m.src} muted className="h-full w-full object-cover" />
-                  ) : (
-                    <Image src={m.src} alt="" fill sizes="64px" className="object-cover" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5, ease }}>
@@ -279,7 +322,7 @@ export default function ProductDetail({
 
           <div className="mt-8 space-y-3 border-t border-white/5 pt-6">
             <div className="flex items-center gap-3 font-body text-xs text-muted">
-              <Truck size={15} className="text-accent" /> Free shipping on orders over $75
+              <Truck size={15} className="text-accent" /> Free shipping on orders over ₹{freeShippingThreshold}
             </div>
             <div className="flex items-center gap-3 font-body text-xs text-muted">
               <ShieldCheck size={15} className="text-accent" /> 30-day hassle-free returns

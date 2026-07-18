@@ -37,3 +37,34 @@ export async function deleteProduct(idOrSlug: string): Promise<void> {
     throw new Error(data?.error ?? "Failed to delete product.");
   }
 }
+export interface BulkProductRow {
+  name?: string;
+  categorySlug?: string;
+  price?: number | string;
+  compareAtPrice?: number | string;
+  image?: string;
+  images?: string[];
+  stock?: number | string;
+  sizes?: string[];
+  isNew?: boolean;
+  isSpotlight?: boolean;
+}
+
+export interface BulkCreateResult {
+  created: Product[];
+  errors: { index: number; name?: string; error: string }[];
+  createdCount: number;
+  errorCount: number;
+}
+
+export async function bulkCreateProducts(products: BulkProductRow[]): Promise<BulkCreateResult> {
+  const res = await fetch("/api/products/bulk", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ products }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Bulk import failed.");
+  return data;
+}
