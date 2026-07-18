@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +18,12 @@ import ReviewsSection from "./ReviewsSection";
 import { useProductPrice } from "@/src/hooks/useProductPrice";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+// Sharp, deliberate "digital" easing for the gallery wipe — snappier than
+// the soft `ease` used elsewhere, so the transition reads as intentional/
+// mechanical rather than dreamy.
+const wipeEase = [0.76, 0, 0.24, 1] as const;
+const wipeTransition = { duration: 0.55, ease: wipeEase };
 
 export default function ProductDetail({
   product,
@@ -94,12 +100,24 @@ export default function ProductDetail({
 
   const [autoplayPaused, setAutoplayPaused] = useState(false);
 
+  // Tracks whether the gallery is moving forward (+1) or backward (-1) so
+  // the wipe transition can sweep in the direction that matches the change
+  // — left-to-right when advancing, right-to-left when going back, rather
+  // than always sweeping the same way regardless of which dot was clicked.
+  const directionRef = useRef(1);
+
+  function goToMedia(index: number) {
+    directionRef.current = index >= activeMedia ? 1 : -1;
+    setActiveMedia(index);
+  }
+
   // Auto-advance through gallery images every 4s — pauses on hover so
   // shoppers can linger, and never auto-advances away from a playing video.
   useEffect(() => {
     if (gallery.length <= 1 || autoplayPaused) return;
     if (gallery[activeMedia]?.type === "video") return;
     const timer = setTimeout(() => {
+      directionRef.current = 1;
       setActiveMedia((i) => (i + 1) % gallery.length);
     }, 4000);
     return () => clearTimeout(timer);
@@ -139,6 +157,8 @@ export default function ProductDetail({
     setTimeout(() => setAdded(false), 1800);
   }
 
+  const dir = directionRef.current;
+
   return (
     <div>
       <div className="mb-6 flex items-center gap-1.5 font-body text-xs text-muted">
@@ -156,25 +176,25 @@ export default function ProductDetail({
             onMouseEnter={() => setAutoplayPaused(true)}
             onMouseLeave={() => setAutoplayPaused(false)}
           >
-            <AnimatePresence mode="wait">
+            <AnimatePresence initial={false}>
               {gallery[activeMedia]?.type === "video" ? (
                 <motion.video
                   key={gallery[activeMedia].src}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.35, ease }}
+                  initial={{ clipPath: dir >= 0 ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)" }}
+                  animate={{ clipPath: "inset(0 0% 0 0%)" }}
+                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                  transition={wipeTransition}
                   src={gallery[activeMedia].src}
                   controls
-                  className="h-full w-full object-cover"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
               ) : (
                 <motion.div
                   key={gallery[activeMedia]?.src ?? "fallback"}
-                  initial={{ opacity: 0, scale: 1.02 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.45, ease }}
+                  initial={{ clipPath: dir >= 0 ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)" }}
+                  animate={{ clipPath: "inset(0 0% 0 0%)" }}
+                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                  transition={wipeTransition}
                   className="absolute inset-0"
                 >
                   <Image
@@ -184,6 +204,16 @@ export default function ProductDetail({
                     sizes="(max-width: 1024px) 100vw, 50vw"
                     className="object-cover"
                     priority
+                  />
+                  {/* Futuristic scan-light sweep, synced to the wipe direction —
+                      a thin skewed highlight glides across the frame like a
+                      HUD scan-line, reinforcing the "panel opening" feel. */}
+                  <motion.div
+                    key={`sweep-${gallery[activeMedia]?.src}`}
+                    initial={{ x: dir >= 0 ? "-120%" : "120%" }}
+                    animate={{ x: dir >= 0 ? "220%" : "-220%" }}
+                    transition={{ duration: 0.55, ease: wipeEase }}
+                    className="pointer-events-none absolute inset-y-0 w-1/4 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent"
                   />
                 </motion.div>
               )}
@@ -201,7 +231,7 @@ export default function ProductDetail({
                 {gallery.map((_, i) => (
                   <button
                     key={i}
-                    onClick={() => setActiveMedia(i)}
+                    onClick={() => goToMedia(i)}
                     aria-label={`Go to image ${i + 1}`}
                     className={cn(
                       "h-1.5 rounded-full bg-bg/60 backdrop-blur-sm transition-all",
