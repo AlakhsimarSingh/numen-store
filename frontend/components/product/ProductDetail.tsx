@@ -227,9 +227,12 @@ export default function ProductDetail({
               {gallery[activeMedia]?.type === "video" ? (
                 <motion.video
                   key={gallery[activeMedia].src}
-                  initial={{ clipPath: dir >= 0 ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)" }}
-                  animate={{ clipPath: "inset(0 0% 0 0%)" }}
-                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                  initial={{ clipPath: dir >= 0 ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)" }}
+                  animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
+                  exit={{
+                    clipPath: dir >= 0 ? "inset(0% 100% 0% 0%)" : "inset(0% 0% 0% 100%)",
+                    transition: { duration: 0.35, ease: wipeEase },
+                  }}
                   transition={wipeTransition}
                   src={gallery[activeMedia].src}
                   controls
@@ -238,9 +241,12 @@ export default function ProductDetail({
               ) : (
                 <motion.div
                   key={gallery[activeMedia]?.src ?? "fallback"}
-                  initial={{ clipPath: dir >= 0 ? "inset(0 0 0 100%)" : "inset(0 100% 0 0)" }}
-                  animate={{ clipPath: "inset(0 0% 0 0%)" }}
-                  exit={{ opacity: 0, transition: { duration: 0.2 } }}
+                  initial={{ clipPath: dir >= 0 ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)" }}
+                  animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
+                  exit={{
+                    clipPath: dir >= 0 ? "inset(0% 100% 0% 0%)" : "inset(0% 0% 0% 100%)",
+                    transition: { duration: 0.35, ease: wipeEase },
+                  }}
                   transition={wipeTransition}
                   className="absolute inset-0 overflow-hidden"
                 >
