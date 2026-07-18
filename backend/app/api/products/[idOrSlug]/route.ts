@@ -5,6 +5,8 @@ import {
   computeStock,
   collectProductMediaUrls,
   findProductByIdOrSlug,
+  generateSeoFields,
+  generateUniqueSlug,
   serializeProduct,
 } from "@/lib/products/products";
 import { deleteMediaByUrls } from "@/lib/storage/supabase";
@@ -122,6 +124,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       sizes: finalSizes,
       variantStock: data.variantStock as never,
     });
+  }
+
+  // Slug tracks the name: regenerate it whenever the name changes, so a
+  // renamed product isn't stuck on the slug it was first created with.
+  // The product's own current row is excluded from the collision check so
+  // re-saving without actually changing the name (or changing it back to
+  // something that only collides with itself) doesn't grow a spurious
+  // "-2" suffix.
+  if (data.name !== undefined && data.name !== existing.name) {
+    data.slug = await generateUniqueSlug(data.name as string, existing.id);
+  }
+
+  // SEO fields are fully automatic and never accepted from the client —
+  // regenerate them whenever any of their inputs (name, category, price,
+  // new/spotlight badges) changed in this request.
+  const seoInputsChanged =
+    data.name !== undefined ||
+    data.categorySlug !== undefined ||
+    data.price !== undefined ||
+    data.isNew !== undefined ||
+    data.isSpotlight !== undefined;
+
+  if (seoInputsChanged) {
+    const finalCategorySlug = (data.categorySlug as string | undefined) ?? existing.categorySlug;
+    const category = await prisma.category.findUnique({ where: { slug: finalCategorySlug } });
+
+    const seo = generateSeoFields({
+      name: (data.name as string | undefined) ?? existing.name,
+      categoryName: category?.name,
+      price: (data.price as number | undefined) ?? Number(existing.price),
+      isNew: (data.isNew as boolean | undefined) ?? existing.isNew,
+      isSpotlight: (data.isSpotlight as boolean | undefined) ?? existing.isSpotlight,
+    });
+    data.metaTitle = seo.metaTitle;
+    data.metaDescription = seo.metaDescription;
+    data.keywords = seo.keywords;
   }
 
   // Work out which media URLs are being dropped by this update so we can

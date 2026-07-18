@@ -198,6 +198,10 @@ model Product {
   orderItems     OrderItem[]
   wishlistItems  WishlistItem[]
   recentlyViewed RecentlyViewed[]
+  
+  metaTitle       String   @default("")
+  metaDescription String   @default("")
+  keywords        String[] @default([])
 
   @@index([categorySlug])
 }

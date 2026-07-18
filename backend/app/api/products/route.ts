@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
-import { computeStock, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
+import { computeStock, generateSeoFields, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
 
 export async function GET() {
   const products = await prisma.product.findMany({ orderBy: { createdAt: "desc" } });
@@ -60,6 +60,17 @@ export async function POST(req: NextRequest) {
   const stock = computeStock({ stock: Number(body.stock) || 0, colors, sizes, variantStock });
   const slug = await generateUniqueSlug(name);
 
+  // SEO fields are always derived server-side from the product's real data
+  // — the request body is never consulted for metaTitle/metaDescription/
+  // keywords, even if a client happened to send them.
+  const seo = generateSeoFields({
+    name,
+    categoryName: category.name,
+    price: priceNum,
+    isNew,
+    isSpotlight,
+  });
+
   try {
     const created = await prisma.product.create({
       data: {
@@ -79,6 +90,9 @@ export async function POST(req: NextRequest) {
         sizes,
         variantStock,
         regionalPrices,
+        metaTitle: seo.metaTitle,
+        metaDescription: seo.metaDescription,
+        keywords: seo.keywords,
       },
     });
     return NextResponse.json(serializeProduct(created), { status: 201 });

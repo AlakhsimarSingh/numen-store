@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
-import { computeStock, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
+import { computeStock, generateSeoFields, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
 
 interface BulkRow {
   name?: string;
@@ -30,10 +30,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Fetch every referenced category once, instead of per-row, to keep a
-  // 700-row import from firing 700 separate lookups.
+  // 700-row import from firing 700 separate lookups. Also gives us
+  // category.name for SEO description/keyword generation without an
+  // extra query per row.
   const categorySlugs = [...new Set(rows.map((r) => r.categorySlug).filter(Boolean))] as string[];
   const categories = await prisma.category.findMany({ where: { slug: { in: categorySlugs } } });
-  const validCategorySlugs = new Set(categories.map((c) => c.slug));
+  const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
 
   const created: ReturnType<typeof serializeProduct>[] = [];
   const errors: { index: number; name?: string; error: string }[] = [];
@@ -50,7 +52,8 @@ export async function POST(req: NextRequest) {
       const priceNum = Number(row.price);
 
       if (!name) throw new Error("Name is required.");
-      if (!categorySlug || !validCategorySlugs.has(categorySlug)) throw new Error(`Category "${categorySlug}" not found.`);
+      const category = categoryBySlug.get(categorySlug);
+      if (!category) throw new Error(`Category "${categorySlug}" not found.`);
       if (!image) throw new Error("Main image is required.");
       if (!Number.isFinite(priceNum) || priceNum < 0) throw new Error("Price must be a non-negative number.");
 
@@ -65,6 +68,16 @@ export async function POST(req: NextRequest) {
       const stock = computeStock({ stock: Number(row.stock) || 0, sizes });
       const slug = await generateUniqueSlug(name);
 
+      const isNew = Boolean(row.isNew);
+      const isSpotlight = Boolean(row.isSpotlight);
+      const seo = generateSeoFields({
+        name,
+        categoryName: category.name,
+        price: priceNum,
+        isNew,
+        isSpotlight,
+      });
+
       const product = await prisma.product.create({
         data: {
           slug,
@@ -76,8 +89,11 @@ export async function POST(req: NextRequest) {
           images,
           stock,
           sizes,
-          isNew: Boolean(row.isNew),
-          isSpotlight: Boolean(row.isSpotlight),
+          isNew,
+          isSpotlight,
+          metaTitle: seo.metaTitle,
+          metaDescription: seo.metaDescription,
+          keywords: seo.keywords,
         },
       });
 
