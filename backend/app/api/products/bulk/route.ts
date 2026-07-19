@@ -3,6 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { computeStock, generateSeoFields, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
 
+// Defensive headroom on top of client-side batching (see BATCH_SIZE in the
+// bulk-import page). Each request now only creates a chunk of products, not
+// the whole import, but this still gives slower chunks (e.g. many rows with
+// colliding names needing several generateUniqueSlug lookups) more room
+// before a platform-level timeout. Only takes effect on runtimes that
+// support Next.js route segment config (e.g. Vercel) — has no effect
+// elsewhere. Note: Vercel's Hobby plan hard-caps at 10s regardless of this
+// value; Pro/Enterprise honor it up to their plan's ceiling.
+export const maxDuration = 60;
+
 interface BulkRow {
   name?: string;
   categorySlug?: string;

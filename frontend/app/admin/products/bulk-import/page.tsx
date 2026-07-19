@@ -11,6 +11,14 @@ import { chunkImages, guessCategoryFromFolderName, extractFolderName, type Image
 import { cn } from "@/src/lib/utils";
 
 const CONCURRENCY = 4;
+// Products are created in chunks of this size rather than one giant
+// request. A single request creating 40-50+ products sequentially on the
+// server can run long enough to hit a serverless function's time limit
+// (Vercel Hobby caps at 10s regardless; Pro defaults to 60s) and come back
+// as a 502/504 with no indication of which rows, if any, actually made it
+// in. Smaller requests finish comfortably inside any platform's limit and
+// let progress — and partial success — show up incrementally.
+const BATCH_SIZE = 15;
 const SLOT_LABELS = ["Main", "Hover", "Third"] as const;
 
 type SlotRef = { groupIndex: number; slotIndex: number };
@@ -67,6 +75,10 @@ export default function BulkImportPage() {
   const [skippedGroupIds, setSkippedGroupIds] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // Tracks batches of the CREATE step (separate from `progress`, which
+  // tracks image uploads) so the action bar can show "creating batch 2/4"
+  // once uploads finish and the chunked bulkCreateProducts calls start.
+  const [creationProgress, setCreationProgress] = useState<{ done: number; total: number } | null>(null);
   const [results, setResults] = useState<BulkCreateResult | null>(null);
 
   // Click-to-select-then-click-to-swap — works with mouse and touch alike,
@@ -283,21 +295,48 @@ export default function BulkImportPage() {
       stock,
     }));
 
-    try {
-      const result = await bulkCreateProducts(payload);
-      setResults(result);
-      if (result.errorCount === 0) {
-        showToast(`${result.createdCount} products created — edit them individually to fine-tune details`);
-        resetBatch();
-      } else {
-        showToast(`${result.createdCount} created, ${result.errorCount} failed`, "error");
+    setProgress(null); // uploads are done — swap the progress bar over to creation
+
+    const aggregate: BulkCreateResult = { created: [], errors: [], createdCount: 0, errorCount: 0 };
+    const totalBatches = Math.ceil(payload.length / BATCH_SIZE);
+    setCreationProgress({ done: 0, total: totalBatches });
+
+    for (let start = 0; start < payload.length; start += BATCH_SIZE) {
+      const chunk = payload.slice(start, start + BATCH_SIZE);
+      try {
+        const chunkResult = await bulkCreateProducts(chunk);
+        aggregate.created.push(...chunkResult.created);
+        // Error indices come back relative to the chunk — offset them back
+        // to the full-batch position so "Product N" in the results panel
+        // still matches what's shown in the preview grid above.
+        aggregate.errors.push(...chunkResult.errors.map((e) => ({ ...e, index: e.index + start })));
+        aggregate.createdCount += chunkResult.createdCount;
+        aggregate.errorCount += chunkResult.errorCount;
+      } catch (err) {
+        // The whole chunk's request failed (network error, 502, etc.) —
+        // record every row in it as failed instead of silently losing them,
+        // and keep going with the remaining chunks rather than aborting.
+        const message = err instanceof Error ? err.message : "Batch request failed.";
+        chunk.forEach((row, i) => {
+          aggregate.errors.push({ index: start + i, name: row.name, error: message });
+        });
+        aggregate.errorCount += chunk.length;
       }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Import failed", "error");
-    } finally {
-      setImporting(false);
-      setProgress(null);
+
+      setResults({ ...aggregate, created: [...aggregate.created], errors: [...aggregate.errors] });
+      setCreationProgress({ done: Math.floor(start / BATCH_SIZE) + 1, total: totalBatches });
     }
+
+    if (aggregate.errorCount === 0) {
+      showToast(`${aggregate.createdCount} products created — edit them individually to fine-tune details`);
+      resetBatch();
+    } else {
+      showToast(`${aggregate.createdCount} created, ${aggregate.errorCount} failed`, "error");
+    }
+
+    setImporting(false);
+    setProgress(null);
+    setCreationProgress(null);
   }
 
   return (
@@ -546,18 +585,32 @@ export default function BulkImportPage() {
               className="flex shrink-0 items-center gap-2 rounded-full bg-accent px-6 py-3 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01] disabled:opacity-70"
             >
               {importing ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
-              {importing ? "Importing…" : `Create ${activeGroups.length} Products`}
+              {importing
+                ? creationProgress
+                  ? `Creating… (batch ${creationProgress.done}/${creationProgress.total})`
+                  : "Uploading…"
+                : `Create ${activeGroups.length} Products`}
             </button>
-            {progress ? (
+            {progress || creationProgress ? (
               <div className="flex-1">
                 <div className="h-2 overflow-hidden rounded-full bg-surface2">
                   <div
                     className="h-full bg-accent transition-all"
-                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                    style={{
+                      width: creationProgress
+                        ? `${(creationProgress.done / creationProgress.total) * 100}%`
+                        : progress
+                          ? `${(progress.done / progress.total) * 100}%`
+                          : "0%",
+                    }}
                   />
                 </div>
                 <p className="mt-1 font-mono text-[10px] text-muted">
-                  Uploading: {progress.done}/{progress.total}
+                  {creationProgress
+                    ? `Creating products: batch ${creationProgress.done}/${creationProgress.total}`
+                    : progress
+                      ? `Uploading: ${progress.done}/${progress.total}`
+                      : ""}
                 </p>
               </div>
             ) : (
