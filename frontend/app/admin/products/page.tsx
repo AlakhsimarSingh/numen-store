@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Loader2, Pencil, Plus, Search, Star, Trash2, UploadCloud, X } from "lucide-react";
+import { Check, CheckSquare, Loader2, Pencil, Plus, Search, Star, Trash2, UploadCloud, X } from "lucide-react";
 import { fetchCategories, type Category } from "@/src/lib/categories";
 import { fetchProducts, createProduct, updateProduct, deleteProduct } from "@/src/lib/products";
 import { uploadMedia, deleteMedia } from "@/src/lib/media";
@@ -15,6 +15,15 @@ import VariantsEditor from "@/components/admin/VariantsEditor";
 import { useRouter } from "next/navigation";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+// Bulk delete is processed this many products at a time. Each deleteProduct()
+// call is its own request/serverless invocation, so keeping chunks small
+// caps how much work is in flight at once (avoiding pile-ups that could run
+// long) and gives us a natural checkpoint after every chunk to update
+// progress — rather than firing all deletes in one uncontrolled burst or
+// relying on a single request to handle the whole batch server-side, which
+// risks tripping Vercel's ~10s function timeout for larger selections.
+const BULK_DELETE_CHUNK_SIZE = 4;
 
 const formatBasePriceINR = (value: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -62,6 +71,15 @@ const emptyForm: FormState = {
 };
 
 type ImageSlotKey = "image" | "hoverImage" | "thirdImage";
+
+// Splits an array into chunks of at most `size` items each, preserving order.
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
 
 function ImageSlot({
   label,
@@ -209,6 +227,12 @@ export default function AdminProductsPage() {
   const [dragOverImageSlot, setDragOverImageSlot] = useState<ImageSlotKey | null>(null);
   const [draggingImageSlot, setDraggingImageSlot] = useState<ImageSlotKey | null>(null);
   const imageDragSourceRef = useRef<ImageSlotKey | null>(null);
+
+  // Multi-select + bulk delete for the product grid.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
 
   function registerUpload(url: string, path: string) {
     pendingUploadsRef.current.push({ url, path });
@@ -498,6 +522,89 @@ export default function AdminProductsPage() {
     }));
   }
 
+  function toggleSelectMode() {
+    if (bulkDeleting) return;
+    setSelectMode((v) => {
+      if (v) setSelectedIds(new Set()); // turning select mode off clears any selection
+      return !v;
+    });
+  }
+
+  function toggleSelected(id: string) {
+    if (bulkDeleting) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllFiltered() {
+    if (bulkDeleting) return;
+    setSelectedIds(new Set(filtered.map((p) => p.id)));
+  }
+
+  function clearSelection() {
+    if (bulkDeleting) return;
+    setSelectedIds(new Set());
+  }
+
+  // Deletes every selected product, but never all at once. Requests go out
+  // BULK_DELETE_CHUNK_SIZE at a time — each chunk awaited (via
+  // Promise.allSettled, so one failure doesn't block the rest) before the
+  // next one starts. This keeps any single burst of work small enough to
+  // comfortably clear Vercel's serverless timeout, and gives the UI a
+  // natural checkpoint after every chunk to report progress and reflect
+  // completed deletions immediately rather than only at the very end.
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} product${ids.length !== 1 ? "s" : ""}? This can't be undone.`)) return;
+
+    const idToName = new Map(products.map((p) => [p.id, p.name]));
+    const failures: { id: string; name: string }[] = [];
+
+    setBulkDeleting(true);
+    setBulkProgress({ done: 0, total: ids.length });
+
+    for (const chunk of chunkArray(ids, BULK_DELETE_CHUNK_SIZE)) {
+      const results = await Promise.allSettled(chunk.map((id) => deleteProduct(id)));
+
+      const succeededIds = new Set(
+        chunk.filter((id, i) => results[i].status === "fulfilled")
+      );
+      results.forEach((res, i) => {
+        if (res.status === "rejected") {
+          failures.push({ id: chunk[i], name: idToName.get(chunk[i]) ?? chunk[i] });
+        }
+      });
+
+      // Reflect progress as it happens — the grid visibly shrinks chunk by
+      // chunk instead of jumping all at once when the whole operation ends.
+      if (succeededIds.size > 0) {
+        setProducts((prev) => prev.filter((p) => !succeededIds.has(p.id)));
+      }
+      setBulkProgress((prev) => ({ ...prev, done: prev.done + chunk.length }));
+    }
+
+    setBulkDeleting(false);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+
+    const deletedCount = ids.length - failures.length;
+    if (failures.length === 0) {
+      showToast(`${deletedCount} product${deletedCount !== 1 ? "s" : ""} deleted`, "info");
+    } else if (deletedCount === 0) {
+      showToast(`Failed to delete ${failures.length} product${failures.length !== 1 ? "s" : ""}`, "error");
+    } else {
+      showToast(
+        `${deletedCount} deleted, ${failures.length} failed — reselect and retry for the rest`,
+        "error"
+      );
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -513,40 +620,53 @@ export default function AdminProductsPage() {
           <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">Products</h1>
           <p className="mt-1 font-body text-sm text-muted">{products.length} total products</p>
         </div>
-        <div className="relative">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setAddMenuOpen((v) => !v)}
-            className="flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
+            type="button"
+            onClick={toggleSelectMode}
+            disabled={bulkDeleting}
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-full border px-4 py-2.5 font-body text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              selectMode ? "border-accent bg-accent/10 text-accent" : "border-white/10 text-muted hover:text-ink"
+            )}
           >
-            <Plus size={16} /> Add Product
+            <CheckSquare size={16} /> {selectMode ? "Cancel" : "Select"}
           </button>
-          {addMenuOpen && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setAddMenuOpen(false)} />
-              <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-2xl">
-                <button
-                  onClick={() => {
-                    setAddMenuOpen(false);
-                    openAdd();
-                  }}
-                  className="block w-full px-4 py-3 text-left font-body text-sm text-ink hover:bg-surface2"
-                >
-                  <span className="block">Single Product</span>
-                  <span className="block font-mono text-[10px] text-muted">Full details, one at a time</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setAddMenuOpen(false);
-                    router.push("/admin/products/bulk-import");
-                  }}
-                  className="block w-full border-t border-white/5 px-4 py-3 text-left font-body text-sm text-ink hover:bg-surface2"
-                >
-                  <span className="block">Bulk Upload</span>
-                  <span className="block font-mono text-[10px] text-muted">Import many at once from a folder</span>
-                </button>
-              </div>
-            </>
-          )}
+          <div className="relative">
+            <button
+              onClick={() => setAddMenuOpen((v) => !v)}
+              className="flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
+            >
+              <Plus size={16} /> Add Product
+            </button>
+            {addMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setAddMenuOpen(false)} />
+                <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-surface shadow-2xl">
+                  <button
+                    onClick={() => {
+                      setAddMenuOpen(false);
+                      openAdd();
+                    }}
+                    className="block w-full px-4 py-3 text-left font-body text-sm text-ink hover:bg-surface2"
+                  >
+                    <span className="block">Single Product</span>
+                    <span className="block font-mono text-[10px] text-muted">Full details, one at a time</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAddMenuOpen(false);
+                      router.push("/admin/products/bulk-import");
+                    }}
+                    className="block w-full border-t border-white/5 px-4 py-3 text-left font-body text-sm text-ink hover:bg-surface2"
+                  >
+                    <span className="block">Bulk Upload</span>
+                    <span className="block font-mono text-[10px] text-muted">Import many at once from a folder</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -574,19 +694,56 @@ export default function AdminProductsPage() {
         </select>
       </div>
 
+      {selectMode && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-surface px-4 py-2.5">
+          <button
+            type="button"
+            onClick={selectAllFiltered}
+            disabled={bulkDeleting}
+            className="font-body text-xs text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Select all {filtered.length} shown
+          </button>
+          <span className="text-white/10">|</span>
+          <button
+            type="button"
+            onClick={clearSelection}
+            disabled={bulkDeleting}
+            className="font-body text-xs text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Clear selection
+          </button>
+          <span className="ml-auto font-mono text-xs text-muted">{selectedIds.size} selected</span>
+        </div>
+      )}
+
       {/* Card grid — image-forward, readable at a glance, same layout logic on mobile and desktop (just fewer columns) */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
         {filtered.map((p) => {
           const cat = categories.find((c) => c.slug === p.categorySlug);
           const outOfStock = p.stock === 0;
           const lowStock = p.stock > 0 && p.stock <= 5;
+          const isSelected = selectedIds.has(p.id);
           return (
             <div
               key={p.id}
-              className="group overflow-hidden rounded-2xl border border-white/5 bg-surface transition-colors hover:border-white/10"
+              onClick={() => {
+                if (selectMode) toggleSelected(p.id);
+              }}
+              className={cn(
+                "group overflow-hidden rounded-2xl border bg-surface transition-colors",
+                selectMode && !bulkDeleting && "cursor-pointer",
+                isSelected ? "border-accent ring-2 ring-inset ring-accent" : "border-white/5 hover:border-white/10"
+              )}
             >
               <div className="relative aspect-square bg-surface2">
-                <Image src={p.image} alt={p.name} fill sizes="(max-width: 640px) 50vw, 240px" className="object-cover" />
+                <Image
+                  src={p.image}
+                  alt={p.name}
+                  fill
+                  sizes="(max-width: 640px) 50vw, 240px"
+                  className={cn("object-cover", isSelected && "opacity-80")}
+                />
 
                 <div className="absolute left-2 top-2 flex flex-col gap-1">
                   {p.isNew && (
@@ -612,23 +769,42 @@ export default function AdminProductsPage() {
                   </span>
                 )}
 
-                {/* Actions: always visible on touch devices (no hover), fade in on desktop hover */}
-                <div className="absolute right-2 top-2 flex gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                  <button
-                    onClick={() => openEdit(p)}
-                    aria-label="Edit"
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-bg/85 text-ink backdrop-blur-sm hover:text-accent"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(p.id, p.name)}
-                    aria-label="Delete"
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-bg/85 text-ink backdrop-blur-sm hover:text-accent2"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+                {/* Right slot: quick edit/delete normally, a select checkbox while selecting */}
+                {selectMode ? (
+                  <div className="absolute right-2 top-2">
+                    <div
+                      className={cn(
+                        "flex h-7 w-7 items-center justify-center rounded-full border backdrop-blur-sm transition-colors",
+                        isSelected ? "border-accent bg-accent text-bg" : "border-white/30 bg-bg/70 text-transparent"
+                      )}
+                    >
+                      <Check size={14} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="absolute right-2 top-2 flex gap-1.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(p);
+                      }}
+                      aria-label="Edit"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-bg/85 text-ink backdrop-blur-sm hover:text-accent"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(p.id, p.name);
+                      }}
+                      aria-label="Delete"
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-bg/85 text-ink backdrop-blur-sm hover:text-accent2"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="p-2.5 sm:p-3">
@@ -652,6 +828,61 @@ export default function AdminProductsPage() {
           <p className="col-span-full py-14 text-center font-body text-sm text-muted">No products match your filters.</p>
         )}
       </div>
+
+      {/* Floating bulk-action bar — appears once at least one product is
+          selected, and switches into a progress view while the chunked
+          delete is running. */}
+      {selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-[90] flex justify-center px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease }}
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-4 shadow-2xl"
+          >
+            {bulkDeleting ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between font-body text-xs text-muted">
+                  <span className="flex items-center gap-1.5">
+                    <Loader2 size={13} className="animate-spin" /> Deleting products…
+                  </span>
+                  <span className="font-mono">
+                    {bulkProgress.done}/{bulkProgress.total}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-300"
+                    style={{
+                      width: `${bulkProgress.total ? (bulkProgress.done / bulkProgress.total) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-body text-sm text-ink">{selectedIds.size} selected</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="rounded-full border border-white/10 px-3 py-1.5 font-body text-xs text-muted hover:text-ink"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    className="flex items-center gap-1.5 rounded-full bg-accent2 px-4 py-1.5 font-body text-xs font-semibold text-ink transition-transform hover:scale-[1.02]"
+                  >
+                    <Trash2 size={13} /> Delete Selected
+                  </button>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
 
       {modalOpen && (
         <div
