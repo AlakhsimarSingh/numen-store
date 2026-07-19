@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { FolderOpen, Images, Loader2, Trash2, UploadCloud } from "lucide-react";
+import { FolderOpen, Images, Loader2, Trash2, UploadCloud, X } from "lucide-react";
 import { fetchCategories, type Category } from "@/src/lib/categories";
 import { bulkCreateProducts, type BulkCreateResult } from "@/src/lib/products";
 import { uploadMedia } from "@/src/lib/media";
@@ -11,6 +11,13 @@ import { chunkImages, guessCategoryFromFolderName, extractFolderName, type Image
 import { cn } from "@/src/lib/utils";
 
 const CONCURRENCY = 4;
+const SLOT_LABELS = ["Main", "Hover", "Third"] as const;
+
+type SlotRef = { groupIndex: number; slotIndex: number };
+
+function sameSlot(a: SlotRef | null, b: SlotRef | null) {
+  return !!a && !!b && a.groupIndex === b.groupIndex && a.slotIndex === b.slotIndex;
+}
 
 async function uploadWithConcurrency(
   tasks: { file: File; onDone: (url: string) => void }[],
@@ -52,14 +59,24 @@ export default function BulkImportPage() {
   const [compareAtPrice, setCompareAtPrice] = useState("");
   const [stock, setStock] = useState("0");
 
+  // The rearrangeable grid. Derived from files/imagesPerProduct whenever
+  // either changes (a fresh selection or a different grouping size), but
+  // otherwise lives as its own state so drag/swap/remove edits persist
+  // across re-renders instead of being clobbered by re-chunking.
+  const [groups, setGroups] = useState<ImageGroup[]>([]);
   const [skippedGroupIds, setSkippedGroupIds] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  // Typed from the shared BulkCreateResult (defined alongside bulkCreateProducts in
-  // src/lib/products.ts) rather than a duplicated inline shape here — if the API's
-  // response shape ever changes, this component picks it up automatically instead
-  // of silently drifting out of sync and hiding a real type error.
   const [results, setResults] = useState<BulkCreateResult | null>(null);
+
+  // Click-to-select-then-click-to-swap — works with mouse and touch alike,
+  // so it's the primary rearrange interaction. Native HTML5 drag-and-drop
+  // (below) is layered on top as a desktop convenience; both paths funnel
+  // into the same swapSlots() call.
+  const [selectedSlot, setSelectedSlot] = useState<SlotRef | null>(null);
+  const [dragOverSlot, setDragOverSlot] = useState<SlotRef | null>(null);
+  const [draggingSlot, setDraggingSlot] = useState<SlotRef | null>(null);
+  const dragSourceRef = useRef<SlotRef | null>(null);
 
   const folderInputRef = useRef<HTMLInputElement>(null);
   const imagesInputRef = useRef<HTMLInputElement>(null);
@@ -68,14 +85,21 @@ export default function BulkImportPage() {
     fetchCategories().then(setCategories).catch(() => {});
   }, []);
 
-  const groups: ImageGroup[] = useMemo(() => chunkImages(files, imagesPerProduct), [files, imagesPerProduct]);
+  useEffect(() => {
+    setGroups(chunkImages(files, imagesPerProduct));
+    setSkippedGroupIds(new Set());
+    setSelectedSlot(null);
+  }, [files, imagesPerProduct]);
+
   const activeGroups = groups.filter((g) => !skippedGroupIds.has(g.id));
 
   function resetBatch() {
     setFiles([]);
+    setGroups([]);
     setSkippedGroupIds(new Set());
     setResults(null);
     setDetectedFolder(null);
+    setSelectedSlot(null);
   }
 
   function handleFolderSelected(fileList: FileList | null) {
@@ -86,7 +110,6 @@ export default function BulkImportPage() {
       return;
     }
     setFiles(imageFiles);
-    setSkippedGroupIds(new Set());
     setResults(null);
 
     const relPath = (fileList[0] as File & { webkitRelativePath?: string }).webkitRelativePath;
@@ -110,7 +133,6 @@ export default function BulkImportPage() {
       return;
     }
     setFiles(imageFiles);
-    setSkippedGroupIds(new Set());
     setResults(null);
     setDetectedFolder(null);
   }
@@ -122,6 +144,87 @@ export default function BulkImportPage() {
       else next.add(id);
       return next;
     });
+  }
+
+  // Swaps whatever is in slot A with whatever is in slot B — including
+  // null. That single symmetric operation covers every case: moving an
+  // image into an empty slot leaves the source empty (a plain move),
+  // moving between two filled slots exchanges them, and moving within the
+  // same product works the same way as moving across two different ones.
+  function swapSlots(a: SlotRef, b: SlotRef) {
+    if (sameSlot(a, b)) return;
+    setGroups((prev) => {
+      const next = prev.map((g) => ({ ...g, images: [...g.images] }));
+      const temp = next[a.groupIndex].images[a.slotIndex];
+      next[a.groupIndex].images[a.slotIndex] = next[b.groupIndex].images[b.slotIndex];
+      next[b.groupIndex].images[b.slotIndex] = temp;
+      return next;
+    });
+  }
+
+  // Clears a single slot on a single product — never touches any other
+  // product's images.
+  function removeSlotImage(target: SlotRef) {
+    setGroups((prev) =>
+      prev.map((g, i) =>
+        i === target.groupIndex
+          ? { ...g, images: g.images.map((img, si) => (si === target.slotIndex ? null : img)) }
+          : g
+      )
+    );
+    setSelectedSlot((sel) => (sameSlot(sel, target) ? null : sel));
+  }
+
+  function handleSlotClick(target: SlotRef) {
+    const hasImage = !!groups[target.groupIndex]?.images[target.slotIndex];
+
+    if (!selectedSlot) {
+      if (!hasImage) return; // nothing to pick up from an empty slot
+      setSelectedSlot(target);
+      return;
+    }
+
+    if (sameSlot(selectedSlot, target)) {
+      setSelectedSlot(null); // clicked the same slot again — deselect
+      return;
+    }
+
+    swapSlots(selectedSlot, target);
+    setSelectedSlot(null);
+  }
+
+  function handleDragStart(e: React.DragEvent, source: SlotRef) {
+    if (!groups[source.groupIndex]?.images[source.slotIndex]) {
+      e.preventDefault();
+      return;
+    }
+    dragSourceRef.current = source;
+    setDraggingSlot(source);
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox requires setData to be called for the drag to actually start.
+    e.dataTransfer.setData("text/plain", "image-slot");
+  }
+
+  function handleDragOver(e: React.DragEvent, target: SlotRef) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (!sameSlot(dragOverSlot, target)) setDragOverSlot(target);
+  }
+
+  function handleDrop(e: React.DragEvent, target: SlotRef) {
+    e.preventDefault();
+    const source = dragSourceRef.current;
+    dragSourceRef.current = null;
+    setDraggingSlot(null);
+    setDragOverSlot(null);
+    if (!source) return;
+    swapSlots(source, target);
+  }
+
+  function handleDragEnd() {
+    dragSourceRef.current = null;
+    setDraggingSlot(null);
+    setDragOverSlot(null);
   }
 
   async function handleImportAll() {
@@ -139,6 +242,18 @@ export default function BulkImportPage() {
     }
     if (activeGroups.length === 0) {
       showToast("No products to import — everything's been skipped", "error");
+      return;
+    }
+
+    // Rearranging can leave a product's Main slot empty (its image was
+    // dragged elsewhere and nothing moved in to replace it) — catch that
+    // before spending time uploading anything.
+    const missingMainCount = activeGroups.filter((g) => !g.images[0]).length;
+    if (missingMainCount > 0) {
+      showToast(
+        `${missingMainCount} product${missingMainCount !== 1 ? "s are" : " is"} missing a Main image — drag an image into the Main slot, or skip that product`,
+        "error"
+      );
       return;
     }
 
@@ -270,6 +385,7 @@ export default function BulkImportPage() {
               </div>
               <p className="mt-1.5 font-mono text-[10px] text-muted">
                 → {Math.ceil(files.length / imagesPerProduct)} product{Math.ceil(files.length / imagesPerProduct) !== 1 ? "s" : ""} will be created
+                {groups.length > 0 && " · tap two images to swap them, drag on desktop, or clear one with the × — changing this setting resets any rearranging"}
               </p>
             </div>
 
@@ -336,10 +452,12 @@ export default function BulkImportPage() {
             </div>
           </div>
 
-          {/* Preview grid — verify grouping/order looks right before spending time uploading */}
+          {/* Preview grid — verify grouping/order looks right, and rearrange
+              images across products before spending time uploading. */}
           <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {groups.map((group, i) => {
+            {groups.map((group, groupIndex) => {
               const skipped = skippedGroupIds.has(group.id);
+              const missingMain = !group.images[0];
               return (
                 <div
                   key={group.id}
@@ -349,17 +467,62 @@ export default function BulkImportPage() {
                   )}
                 >
                   <div className="grid grid-cols-3 gap-px bg-white/5">
-                    {group.images.map((file, slotIdx) => (
-                      <div key={slotIdx} className="relative aspect-square bg-surface2">
-                        {file && (
-                          <Image src={URL.createObjectURL(file)} alt="" fill sizes="100px" className="object-cover" />
-                        )}
-                      </div>
-                    ))}
+                    {group.images.map((file, slotIndex) => {
+                      const target: SlotRef = { groupIndex, slotIndex };
+                      const isSelected = sameSlot(selectedSlot, target);
+                      const isDragOver = sameSlot(dragOverSlot, target);
+                      const isDragging = sameSlot(draggingSlot, target);
+                      return (
+                        <div
+                          key={slotIndex}
+                          onClick={() => handleSlotClick(target)}
+                          onDragOver={(e) => handleDragOver(e, target)}
+                          onDrop={(e) => handleDrop(e, target)}
+                          className={cn(
+                            "group/slot relative aspect-square bg-surface2 transition-all",
+                            file ? "cursor-pointer" : "cursor-default",
+                            isSelected && "ring-2 ring-inset ring-accent",
+                            isDragOver && !isSelected && "ring-2 ring-inset ring-accent/60",
+                            isDragging && "opacity-30"
+                          )}
+                        >
+                          {file ? (
+                            <div
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, target)}
+                              onDragEnd={handleDragEnd}
+                              className="h-full w-full"
+                            >
+                              <Image src={URL.createObjectURL(file)} alt="" fill sizes="100px" className="pointer-events-none object-cover" />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeSlotImage(target);
+                                }}
+                                aria-label="Remove image"
+                                className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-bg/85 text-ink opacity-0 backdrop-blur-sm transition-opacity hover:text-accent2 group-hover/slot:opacity-100"
+                              >
+                                <X size={11} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center border border-dashed border-white/10">
+                              <span className="font-mono text-[9px] text-muted">Empty</span>
+                            </div>
+                          )}
+                          <span className="pointer-events-none absolute bottom-1 left-1 rounded bg-bg/70 px-1 font-mono text-[8px] uppercase text-muted backdrop-blur-sm">
+                            {SLOT_LABELS[slotIndex]}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="flex items-center justify-between p-1.5">
-                    <span className="font-mono text-[10px] text-muted">Product {i + 1}</span>
-                    <button onClick={() => toggleSkip(group.id)} className="text-muted hover:text-accent2">
+                    <span className={cn("font-mono text-[10px]", missingMain && !skipped ? "text-accent2" : "text-muted")}>
+                      Product {groupIndex + 1}{missingMain && !skipped ? " · no main image" : ""}
+                    </span>
+                    <button onClick={() => toggleSkip(group.id)} className="text-muted hover:text-accent2" title="Skip this product">
                       <Trash2 size={12} />
                     </button>
                   </div>

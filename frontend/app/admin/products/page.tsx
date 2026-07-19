@@ -61,7 +61,6 @@ const emptyForm: FormState = {
   regionalPrices: {},
 };
 
-
 type ImageSlotKey = "image" | "hoverImage" | "thirdImage";
 
 function ImageSlot({
@@ -72,6 +71,15 @@ function ImageSlot({
   uploading,
   onUpload,
   onClear,
+  selected,
+  dragOver,
+  dragging,
+  pendingSwap,
+  onSlotClick,
+  onDragStartSlot,
+  onDragOverSlot,
+  onDropSlot,
+  onDragEndSlot,
 }: {
   label: string;
   hint: string;
@@ -80,6 +88,15 @@ function ImageSlot({
   uploading: boolean;
   onUpload: (file: File | undefined) => void;
   onClear: () => void;
+  selected: boolean;
+  dragOver: boolean;
+  dragging: boolean;
+  pendingSwap: boolean;
+  onSlotClick: () => void;
+  onDragStartSlot: (e: React.DragEvent) => void;
+  onDragOverSlot: (e: React.DragEvent) => void;
+  onDropSlot: (e: React.DragEvent) => void;
+  onDragEndSlot: () => void;
 }) {
   return (
     <div>
@@ -90,18 +107,52 @@ function ImageSlot({
       </div>
 
       {value ? (
-        <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-white/10 bg-surface2">
-          <Image src={value} alt={label} fill sizes="200px" className="object-cover" />
+        <div
+          draggable
+          onDragStart={onDragStartSlot}
+          onDragOver={onDragOverSlot}
+          onDrop={onDropSlot}
+          onDragEnd={onDragEndSlot}
+          onClick={onSlotClick}
+          className={cn(
+            "relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border bg-surface2 transition-all",
+            selected ? "border-accent ring-2 ring-inset ring-accent" : "border-white/10",
+            dragOver && !selected && "ring-2 ring-inset ring-accent/60",
+            dragging && "opacity-30"
+          )}
+        >
+          <Image src={value} alt={label} fill sizes="200px" className="pointer-events-none object-cover" />
           <button
             type="button"
-            onClick={onClear}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
             className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-bg/80 text-ink backdrop-blur-sm hover:text-accent2"
           >
             <X size={13} />
           </button>
         </div>
       ) : (
-        <label className="flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-bg text-muted hover:border-accent/40 hover:text-accent">
+        <label
+          onDragOver={onDragOverSlot}
+          onDrop={onDropSlot}
+          onClick={(e) => {
+            // A swap is pending from another slot — complete it here instead
+            // of opening the native file picker. Only intercept the click
+            // when there's actually something to drop into this slot;
+            // otherwise let the label behave normally so uploading still
+            // works with no selection active.
+            if (pendingSwap) {
+              e.preventDefault();
+              onSlotClick();
+            }
+          }}
+          className={cn(
+            "flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed bg-bg text-muted transition-all hover:border-accent/40 hover:text-accent",
+            dragOver ? "border-accent/60 ring-2 ring-inset ring-accent/60" : "border-white/15"
+          )}
+        >
           {uploading ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
           <span className="font-mono text-[10px] uppercase tracking-wide">Upload</span>
           <input
@@ -150,6 +201,15 @@ export default function AdminProductsPage() {
 
   const pendingUploadsRef = useRef<{ url: string; path: string }[]>([]);
 
+  // Same click-to-select-then-click-to-swap interaction as the bulk
+  // importer, applied here to the three fixed slots (image / hoverImage /
+  // thirdImage). Native drag-and-drop is layered on as a desktop
+  // convenience; both paths call swapImageSlots().
+  const [selectedImageSlot, setSelectedImageSlot] = useState<ImageSlotKey | null>(null);
+  const [dragOverImageSlot, setDragOverImageSlot] = useState<ImageSlotKey | null>(null);
+  const [draggingImageSlot, setDraggingImageSlot] = useState<ImageSlotKey | null>(null);
+  const imageDragSourceRef = useRef<ImageSlotKey | null>(null);
+
   function registerUpload(url: string, path: string) {
     pendingUploadsRef.current.push({ url, path });
   }
@@ -189,6 +249,7 @@ export default function AdminProductsPage() {
     setEditingId(null);
     setForm({ ...emptyForm, categorySlug: categories[0]?.slug ?? "" });
     setTab("basic");
+    setSelectedImageSlot(null);
     setModalOpen(true);
   }
 
@@ -219,6 +280,7 @@ export default function AdminProductsPage() {
       ),
     });
     setTab("basic");
+    setSelectedImageSlot(null);
     setModalOpen(true);
   }
 
@@ -226,6 +288,7 @@ export default function AdminProductsPage() {
     const toDelete = pendingUploadsRef.current;
     pendingUploadsRef.current = [];
     toDelete.forEach((u) => deleteMedia(u.path));
+    setSelectedImageSlot(null);
     setModalOpen(false);
   }
 
@@ -275,6 +338,80 @@ export default function AdminProductsPage() {
     } finally {
       setUploadingVideo(false);
     }
+  }
+
+  // Swaps whatever is in slot A with whatever is in slot B — including
+  // empty strings. Swapping into an empty slot leaves the source empty
+  // (a plain move); swapping between two filled slots exchanges them.
+  function swapImageSlots(a: ImageSlotKey, b: ImageSlotKey) {
+    if (a === b) return;
+    setForm((f) => ({ ...f, [a]: f[b], [b]: f[a] }));
+  }
+
+  function handleImageSlotClick(key: ImageSlotKey) {
+    const hasImage = !!form[key];
+
+    if (!selectedImageSlot) {
+      if (!hasImage) return; // nothing to pick up from an empty slot
+      setSelectedImageSlot(key);
+      return;
+    }
+
+    if (selectedImageSlot === key) {
+      setSelectedImageSlot(null); // clicked the same slot again — deselect
+      return;
+    }
+
+    swapImageSlots(selectedImageSlot, key);
+    setSelectedImageSlot(null);
+  }
+
+  function handleImageDragStart(e: React.DragEvent, key: ImageSlotKey) {
+    if (!form[key]) {
+      e.preventDefault();
+      return;
+    }
+    imageDragSourceRef.current = key;
+    setDraggingImageSlot(key);
+    e.dataTransfer.effectAllowed = "move";
+    // Firefox requires setData to be called for the drag to actually start.
+    e.dataTransfer.setData("text/plain", "image-slot");
+  }
+
+  function handleImageDragOver(e: React.DragEvent, key: ImageSlotKey) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverImageSlot !== key) setDragOverImageSlot(key);
+  }
+
+  function handleImageDrop(e: React.DragEvent, key: ImageSlotKey) {
+    e.preventDefault();
+    const source = imageDragSourceRef.current;
+    imageDragSourceRef.current = null;
+    setDraggingImageSlot(null);
+    setDragOverImageSlot(null);
+    if (!source) return;
+    swapImageSlots(source, key);
+  }
+
+  function handleImageDragEnd() {
+    imageDragSourceRef.current = null;
+    setDraggingImageSlot(null);
+    setDragOverImageSlot(null);
+  }
+
+  function imageSlotProps(key: ImageSlotKey) {
+    return {
+      selected: selectedImageSlot === key,
+      dragOver: dragOverImageSlot === key,
+      dragging: draggingImageSlot === key,
+      pendingSwap: !!selectedImageSlot && selectedImageSlot !== key,
+      onSlotClick: () => handleImageSlotClick(key),
+      onDragStartSlot: (e: React.DragEvent) => handleImageDragStart(e, key),
+      onDragOverSlot: (e: React.DragEvent) => handleImageDragOver(e, key),
+      onDropSlot: (e: React.DragEvent) => handleImageDrop(e, key),
+      onDragEndSlot: handleImageDragEnd,
+    };
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -617,7 +754,14 @@ export default function AdminProductsPage() {
                   </div>
 
                   <div>
-                    <p className="mb-1.5 font-body text-xs text-muted">Product images</p>
+                    <div className="mb-1.5 flex items-center justify-between">
+                      <p className="font-body text-xs text-muted">Product images</p>
+                      {(form.image || form.hoverImage || form.thirdImage) && (
+                        <p className="font-mono text-[9px] text-muted">
+                          {selectedImageSlot ? "Tap another slot to swap" : "Tap or drag to rearrange"}
+                        </p>
+                      )}
+                    </div>
                     <div className="grid grid-cols-3 gap-3">
                       <ImageSlot
                         label="Main"
@@ -627,6 +771,7 @@ export default function AdminProductsPage() {
                         uploading={uploadingSlot === "image"}
                         onUpload={(f) => handleSlotUpload("image", f)}
                         onClear={() => setForm((f) => ({ ...f, image: "" }))}
+                        {...imageSlotProps("image")}
                       />
                       <ImageSlot
                         label="Hover"
@@ -635,6 +780,7 @@ export default function AdminProductsPage() {
                         uploading={uploadingSlot === "hoverImage"}
                         onUpload={(f) => handleSlotUpload("hoverImage", f)}
                         onClear={() => setForm((f) => ({ ...f, hoverImage: "" }))}
+                        {...imageSlotProps("hoverImage")}
                       />
                       <ImageSlot
                         label="Third"
@@ -643,6 +789,7 @@ export default function AdminProductsPage() {
                         uploading={uploadingSlot === "thirdImage"}
                         onUpload={(f) => handleSlotUpload("thirdImage", f)}
                         onClear={() => setForm((f) => ({ ...f, thirdImage: "" }))}
+                        {...imageSlotProps("thirdImage")}
                       />
                     </div>
                   </div>
