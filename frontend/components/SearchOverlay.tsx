@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { Loader2, Search, X } from "lucide-react";
+import { ArrowRight, Loader2, Search, X } from "lucide-react";
 import { fetchProducts } from "@/src/lib/products";
 import { buildSearchIndex, searchProducts, type SearchResult } from "@/src/lib/search";
 import { Product } from "@/src/types";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
+import { getDisplayPrice, formatMoney } from "@/src/lib/currency";
+import { cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -64,11 +67,26 @@ export default function SearchOverlay({
   open: boolean;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Currency-aware price formatting — pulled from the same store every
+  // other price on the site uses, instead of the raw `$value.toFixed(2)`
+  // helper this used to call, which always showed dollars regardless of
+  // what currency was actually active for the shopper.
+  const currency = useCurrencyStore((s) => s.currency);
+  const rates = useCurrencyStore((s) => s.rates);
+  const symbols = useCurrencyStore((s) => s.symbols);
+  const symbol = symbols[currency] ?? currency;
+
+  function priceLabel(product: Product) {
+    const display = getDisplayPrice(product, currency, rates);
+    return formatMoney(display.price, currency, symbol);
+  }
 
   useEffect(() => {
     if (open) {
@@ -115,6 +133,12 @@ export default function SearchOverlay({
     return searchProducts(q, products, searchIndex);
   }, [q, products, searchIndex]);
 
+  function goToFullResults() {
+    if (q.length === 0) return;
+    onClose();
+    router.push(`/search?q=${encodeURIComponent(q)}`);
+  }
+
   return (
     <AnimatePresence>
       {open && (
@@ -134,7 +158,13 @@ export default function SearchOverlay({
             className="mx-auto mt-24 w-full max-w-2xl px-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-surface px-5 py-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                goToFullResults();
+              }}
+              className="flex items-center gap-3 rounded-2xl border border-white/10 bg-surface px-5 py-4"
+            >
               <Search size={20} className="shrink-0 text-muted" />
               <input
                 ref={inputRef}
@@ -145,13 +175,14 @@ export default function SearchOverlay({
               />
               {loading && <Loader2 size={16} className="shrink-0 animate-spin text-muted" />}
               <button
+                type="button"
                 onClick={onClose}
                 aria-label="Close search"
                 className="shrink-0 text-muted transition-colors hover:text-ink"
               >
                 <X size={20} />
               </button>
-            </div>
+            </form>
 
             {q.length > 0 && (
               <div className="mt-3 max-h-[60vh] overflow-y-auto rounded-2xl border border-white/5 bg-surface">
@@ -164,23 +195,32 @@ export default function SearchOverlay({
                     No results for &ldquo;{query}&rdquo;.
                   </p>
                 ) : (
-                  results.map((r) => (
-                    <Link
-                      key={r.product.id}
-                      href={`/product/${r.product.slug}`}
-                      onClick={onClose}
-                      className="flex items-center gap-4 border-b border-white/5 px-5 py-3 transition-colors last:border-0 hover:bg-surface2"
+                  <>
+                    {results.map((r) => (
+                      <Link
+                        key={r.product.id}
+                        href={`/product/${r.product.slug}`}
+                        onClick={onClose}
+                        className="flex items-center gap-4 border-b border-white/5 px-5 py-3 transition-colors last:border-0 hover:bg-surface2"
+                      >
+                        <div className="relative h-14 w-12 shrink-0 overflow-hidden rounded-lg bg-surface2">
+                          <Image src={r.product.image} alt={r.product.name} fill sizes="48px" className="object-cover" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-body text-sm text-ink">{r.product.name}</p>
+                          <p className="font-mono text-xs text-muted">{priceLabel(r.product)}</p>
+                          <AttributeBadges result={r} />
+                        </div>
+                      </Link>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={goToFullResults}
+                      className="flex w-full items-center justify-center gap-1.5 px-5 py-3 font-body text-xs font-semibold text-accent hover:bg-surface2"
                     >
-                      <div className="relative h-14 w-12 shrink-0 overflow-hidden rounded-lg bg-surface2">
-                        <Image src={r.product.image} alt={r.product.name} fill sizes="48px" className="object-cover" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-body text-sm text-ink">{r.product.name}</p>
-                        <p className="font-mono text-xs text-muted">{formatPrice(r.product.price)}</p>
-                        <AttributeBadges result={r} />
-                      </div>
-                    </Link>
-                  ))
+                      View all results for &ldquo;{query}&rdquo; <ArrowRight size={13} />
+                    </button>
+                  </>
                 )}
               </div>
             )}

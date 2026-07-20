@@ -4,7 +4,9 @@ import { fetchCategoryBySlugServer, fetchProductsServer } from "@/src/lib/server
 import { iconOptions, iconNames } from "@/src/lib/iconMap";
 import ShopGrid from "@/components/shop/ShopGrid";
 
-export const dynamic = "force-dynamic";
+// Same reasoning as app/shop/page.tsx — cached + background-revalidated
+// instead of fully re-rendered on every request.
+export const revalidate = 300;
 
 export async function generateMetadata({
   params,
