@@ -12,8 +12,19 @@ import { buildSearchIndex, searchProducts } from "@/src/lib/search";
 import { buildPriceBands } from "@/src/lib/priceBands";
 import ProductCard from "@/components/ProductCard";
 import { DesktopFilterAside, MobileFilterButton } from "@/components/shop/FilterSidebar";
+import { SortMenu, type SortOption } from "@/components/shop/SortMenu";
 
-type SortKey = "relevance" | "price-asc" | "price-desc" | "rating";
+type SortKey = "relevance" | "newest" | "price-asc" | "price-desc" | "rating" | "discount" | "name-asc";
+
+const SORT_OPTIONS: SortOption<SortKey>[] = [
+  { value: "relevance", label: "Relevance" },
+  { value: "newest", label: "Newest Arrivals" },
+  { value: "price-asc", label: "Price: Low to High" },
+  { value: "price-desc", label: "Price: High to Low" },
+  { value: "rating", label: "Top Rated" },
+  { value: "discount", label: "Biggest Discount" },
+  { value: "name-asc", label: "Name: A to Z" },
+];
 
 const PAGE_SIZE = 24;
 
@@ -33,7 +44,6 @@ export default function SearchResultsGrid({
   const [query, setQuery] = useState(initialQuery);
   const [sortBy, setSortBy] = useState<SortKey>("relevance");
   const [activeCategory, setActiveCategory] = useState<string | "all">("all");
-  const [activeColors, setActiveColors] = useState<string[]>([]);
   const [activeSizes, setActiveSizes] = useState<string[]>([]);
   const [priceBand, setPriceBand] = useState(0);
   const [newOnly, setNewOnly] = useState(false);
@@ -59,18 +69,9 @@ export default function SearchResultsGrid({
 
   const matchedProducts = useMemo(() => matched.map((r) => r.product), [matched]);
 
-  function toggleColor(name: string) {
-    setActiveColors((prev) => (prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]));
-  }
   function toggleSize(size: string) {
     setActiveSizes((prev) => (prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]));
   }
-
-  const availableColors = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const p of matchedProducts) p.colors?.forEach((c) => map.set(c.name, c.hex));
-    return Array.from(map, ([name, hex]) => ({ name, hex }));
-  }, [matchedProducts]);
 
   const availableSizes = useMemo(() => {
     const set = new Set<string>();
@@ -78,13 +79,25 @@ export default function SearchResultsGrid({
     return Array.from(set).sort();
   }, [matchedProducts]);
 
-  const priceById = useMemo(() => {
-    const map: Record<string, number> = {};
+  const displayById = useMemo(() => {
+    const map: Record<string, { price: number; compareAtPrice?: number }> = {};
     for (const p of matchedProducts) {
-      map[p.id] = getDisplayPrice(p, currency, rates).price;
+      map[p.id] = getDisplayPrice(p, currency, rates);
     }
     return map;
   }, [matchedProducts, currency, rates]);
+
+  const priceById = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const id in displayById) map[id] = displayById[id].price;
+    return map;
+  }, [displayById]);
+
+  function discountRatio(p: Product) {
+    const d = displayById[p.id];
+    if (!d?.compareAtPrice || d.compareAtPrice <= d.price) return -1;
+    return (d.compareAtPrice - d.price) / d.compareAtPrice;
+  }
 
   const priceBands = useMemo(
     () => buildPriceBands(Object.values(priceById), currency, symbol),
@@ -101,9 +114,6 @@ export default function SearchResultsGrid({
     if (activeCategory !== "all") {
       list = list.filter((p) => p.categorySlug === activeCategory);
     }
-    if (activeColors.length > 0) {
-      list = list.filter((p) => p.colors?.some((c) => activeColors.includes(c.name)));
-    }
     if (activeSizes.length > 0) {
       list = list.filter((p) => p.sizes?.some((s) => activeSizes.includes(s)));
     }
@@ -119,6 +129,9 @@ export default function SearchResultsGrid({
     if (newOnly) list = list.filter((p) => p.isNew);
 
     switch (sortBy) {
+      case "newest":
+        list.sort((a, b) => Number(b.isNew) - Number(a.isNew) || b.rating - a.rating);
+        break;
       case "price-asc":
         list.sort((a, b) => (priceById[a.id] ?? 0) - (priceById[b.id] ?? 0));
         break;
@@ -128,15 +141,31 @@ export default function SearchResultsGrid({
       case "rating":
         list.sort((a, b) => b.rating - a.rating);
         break;
+      case "discount":
+        list.sort((a, b) => discountRatio(b) - discountRatio(a));
+        break;
+      case "name-asc":
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        break;
       default:
         break; // "relevance" — keep Fuse's match-quality order from searchProducts
     }
     return list;
-  }, [matchedProducts, activeCategory, activeColors, activeSizes, priceBand, priceBands, priceById, newOnly, sortBy]);
+  }, [
+    matchedProducts,
+    activeCategory,
+    activeSizes,
+    priceBand,
+    priceBands,
+    priceById,
+    displayById,
+    newOnly,
+    sortBy,
+  ]);
 
   useEffect(() => {
     setPage(1);
-  }, [q, sortBy, activeCategory, activeColors, activeSizes, priceBand, newOnly]);
+  }, [q, sortBy, activeCategory, activeSizes, priceBand, newOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages);
@@ -163,7 +192,6 @@ export default function SearchResultsGrid({
 
   function resetFilters() {
     setActiveCategory("all");
-    setActiveColors([]);
     setActiveSizes([]);
     setPriceBand(0);
     setNewOnly(false);
@@ -174,9 +202,6 @@ export default function SearchResultsGrid({
     showCategoryFilter: true,
     activeCategory,
     onCategoryChange: setActiveCategory,
-    availableColors,
-    activeColors,
-    onToggleColor: toggleColor,
     availableSizes,
     activeSizes,
     onToggleSize: toggleSize,
@@ -208,18 +233,9 @@ export default function SearchResultsGrid({
           <div className="min-w-0 flex-1">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-6">
               <MobileFilterButton {...filterProps} />
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex items-center gap-3">
                 <span className="font-mono text-xs text-muted">{filtered.length} results</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortKey)}
-                  className="rounded-full border border-white/10 bg-surface px-3 py-1.5 font-body text-xs text-ink focus:outline-none"
-                >
-                  <option value="relevance">Relevance</option>
-                  <option value="price-asc">Price: Low to High</option>
-                  <option value="price-desc">Price: High to Low</option>
-                  <option value="rating">Top Rated</option>
-                </select>
+                <SortMenu value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
               </div>
             </div>
 

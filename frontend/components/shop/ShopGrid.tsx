@@ -10,8 +10,19 @@ import { getDisplayPrice } from "@/src/lib/currency";
 import ProductCard from "@/components/ProductCard";
 import { buildPriceBands } from "@/src/lib/priceBands";
 import { DesktopFilterAside, MobileFilterButton } from "@/components/shop/FilterSidebar";
+import { SortMenu, type SortOption } from "@/components/shop/SortMenu";
 
-type SortKey = "featured" | "price-asc" | "price-desc" | "rating";
+type SortKey = "featured" | "newest" | "price-asc" | "price-desc" | "rating" | "discount" | "name-asc";
+
+const SORT_OPTIONS: SortOption<SortKey>[] = [
+  { value: "featured", label: "Featured" },
+  { value: "newest", label: "Newest Arrivals" },
+  { value: "price-asc", label: "Price: Low to High" },
+  { value: "price-desc", label: "Price: High to Low" },
+  { value: "rating", label: "Top Rated" },
+  { value: "discount", label: "Biggest Discount" },
+  { value: "name-asc", label: "Name: A to Z" },
+];
 
 // Rendering all 440+ products at once (each with its own Image + framer
 // motion mount) is what was making the page laggy. Paginating keeps the
@@ -39,7 +50,6 @@ export default function ShopGrid({
 
   const [sortBy, setSortBy] = useState<SortKey>("featured");
   const [activeCategory, setActiveCategory] = useState<string | "all">("all");
-  const [activeColors, setActiveColors] = useState<string[]>([]);
   const [activeSizes, setActiveSizes] = useState<string[]>([]);
   const [priceBand, setPriceBand] = useState(0);
   const [newOnly, setNewOnly] = useState(urlFilter === "new");
@@ -52,18 +62,9 @@ export default function ShopGrid({
     if (urlFilter === "new") setNewOnly(true);
   }, [urlFilter]);
 
-  function toggleColor(name: string) {
-    setActiveColors((prev) => (prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]));
-  }
   function toggleSize(size: string) {
     setActiveSizes((prev) => (prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]));
   }
-
-  const availableColors = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const p of initialProducts) p.colors?.forEach((c) => map.set(c.name, c.hex));
-    return Array.from(map, ([name, hex]) => ({ name, hex }));
-  }, [initialProducts]);
 
   const availableSizes = useMemo(() => {
     const set = new Set<string>();
@@ -71,18 +72,30 @@ export default function ShopGrid({
     return Array.from(set).sort();
   }, [initialProducts]);
 
-  // Every product's price resolved to the currently displayed currency
-  // (regional override first, then rate conversion, INR fallback) — the
-  // single source of truth used for both band math and sorting below, so
-  // neither can drift out of sync with what the customer actually sees on
-  // each ProductCard.
-  const priceById = useMemo(() => {
-    const map: Record<string, number> = {};
+  // Every product's price+compareAt resolved to the currently displayed
+  // currency (regional override first, then rate conversion, INR
+  // fallback) — the single source of truth used for band math, sorting,
+  // and discount % below, so none of them can drift out of sync with
+  // what the customer actually sees on each ProductCard.
+  const displayById = useMemo(() => {
+    const map: Record<string, { price: number; compareAtPrice?: number }> = {};
     for (const p of initialProducts) {
-      map[p.id] = getDisplayPrice(p, currency, rates).price;
+      map[p.id] = getDisplayPrice(p, currency, rates);
     }
     return map;
   }, [initialProducts, currency, rates]);
+
+  const priceById = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const id in displayById) map[id] = displayById[id].price;
+    return map;
+  }, [displayById]);
+
+  function discountRatio(p: Product) {
+    const d = displayById[p.id];
+    if (!d?.compareAtPrice || d.compareAtPrice <= d.price) return -1;
+    return (d.compareAtPrice - d.price) / d.compareAtPrice;
+  }
 
   const priceBands = useMemo(
     () => buildPriceBands(Object.values(priceById), currency, symbol),
@@ -105,9 +118,6 @@ export default function ShopGrid({
       list = list.filter((p) => p.categorySlug === activeCategory);
     }
 
-    if (activeColors.length > 0) {
-      list = list.filter((p) => p.colors?.some((c) => activeColors.includes(c.name)));
-    }
     if (activeSizes.length > 0) {
       list = list.filter((p) => p.sizes?.some((s) => activeSizes.includes(s)));
     }
@@ -121,6 +131,9 @@ export default function ShopGrid({
     if (newOnly) list = list.filter((p) => p.isNew);
 
     switch (sortBy) {
+      case "newest":
+        list.sort((a, b) => Number(b.isNew) - Number(a.isNew) || b.rating - a.rating);
+        break;
       case "price-asc":
         list.sort((a, b) => (priceById[a.id] ?? 0) - (priceById[b.id] ?? 0));
         break;
@@ -130,19 +143,26 @@ export default function ShopGrid({
       case "rating":
         list.sort((a, b) => b.rating - a.rating);
         break;
+      case "discount":
+        list.sort((a, b) => discountRatio(b) - discountRatio(a));
+        break;
+      case "name-asc":
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        break;
       default:
-        list.sort((a, b) => Number(b.isNew) - Number(a.isNew));
+        // "Featured" — spotlight picks first, then new drops, then rating as a tiebreak.
+        list.sort((a, b) => Number(b.isSpotlight) - Number(a.isSpotlight) || Number(b.isNew) - Number(a.isNew) || b.rating - a.rating);
     }
     return list;
   }, [
     initialProducts,
     sortBy,
     activeCategory,
-    activeColors,
     activeSizes,
     priceBand,
     priceBands,
     priceById,
+    displayById,
     newOnly,
     showCategoryFilter,
   ]);
@@ -151,7 +171,7 @@ export default function ShopGrid({
   // rather than risk landing on a now-empty page.
   useEffect(() => {
     setPage(1);
-  }, [sortBy, activeCategory, activeColors, activeSizes, priceBand, newOnly]);
+  }, [sortBy, activeCategory, activeSizes, priceBand, newOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages);
@@ -169,7 +189,6 @@ export default function ShopGrid({
 
   function resetFilters() {
     setActiveCategory("all");
-    setActiveColors([]);
     setActiveSizes([]);
     setPriceBand(0);
     setNewOnly(false);
@@ -180,9 +199,6 @@ export default function ShopGrid({
     showCategoryFilter,
     activeCategory,
     onCategoryChange: setActiveCategory,
-    availableColors,
-    activeColors,
-    onToggleColor: toggleColor,
     availableSizes,
     activeSizes,
     onToggleSize: toggleSize,
@@ -210,18 +226,9 @@ export default function ShopGrid({
         <div className="min-w-0 flex-1">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-6">
             <MobileFilterButton {...filterProps} />
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-3">
               <span className="font-mono text-xs text-muted">{filtered.length} items</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortKey)}
-                className="rounded-full border border-white/10 bg-surface px-3 py-1.5 font-body text-xs text-ink focus:outline-none"
-              >
-                <option value="featured">Featured</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-                <option value="rating">Top Rated</option>
-              </select>
+              <SortMenu value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
             </div>
           </div>
 
