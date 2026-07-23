@@ -13,6 +13,18 @@ import { computeStock, generateSeoFields, generateUniqueSlug, serializeProduct }
 // value; Pro/Enterprise honor it up to their plan's ceiling.
 export const maxDuration = 60;
 
+// Self-imposed deadline, comfortably under `maxDuration`. If the loop is
+// still running past this point, we stop processing further rows and
+// return a normal, valid JSON response describing exactly what did and
+// didn't get attempted — instead of letting the platform kill the function
+// mid-loop, which returns a non-JSON crash/timeout page and leaves the
+// client unable to tell which of the already-created rows (if any)
+// actually made it in. This is what makes "some products got created
+// despite the request showing as failed" stop being possible for this
+// specific failure mode: the function now always finishes cleanly, on
+// its own terms, well before the platform would force it to stop.
+const SOFT_DEADLINE_MS = 50_000;
+
 interface BulkRow {
   name?: string;
   categorySlug?: string;
@@ -49,11 +61,23 @@ export async function POST(req: NextRequest) {
 
   const created: ReturnType<typeof serializeProduct>[] = [];
   const errors: { index: number; name?: string; error: string }[] = [];
+  const startedAt = Date.now();
 
   // Sequential, not a single all-or-nothing transaction — with hundreds of
   // rows, one bad row shouldn't wipe out everything else that validated
   // fine. Each row either succeeds or reports its own error.
   for (let i = 0; i < rows.length; i++) {
+    if (Date.now() - startedAt > SOFT_DEADLINE_MS) {
+      // Running out of our self-imposed budget — stop attempting new rows
+      // and report the rest as explicitly not-attempted (distinct from an
+      // actual validation/DB failure) so the client's retry story is
+      // unambiguous: these specific rows are safe to resubmit as-is.
+      for (let j = i; j < rows.length; j++) {
+        errors.push({ index: j, name: rows[j].name, error: "Not attempted — batch ran out of time. Safe to retry this row." });
+      }
+      break;
+    }
+
     const row = rows[i];
     try {
       const name = typeof row.name === "string" ? row.name.trim() : "";
