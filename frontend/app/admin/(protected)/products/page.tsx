@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
+import Fuse from "fuse.js";
 import { Check, CheckSquare, Loader2, Pencil, Plus, Search, Star, Trash2, UploadCloud, X } from "lucide-react";
 import { fetchCategories, type Category } from "@/src/lib/categories";
 import { fetchProducts, createProduct, updateProduct, deleteProduct } from "@/src/lib/products";
+import { buildSearchIndex, searchProducts } from "@/src/lib/search";
 import { uploadMedia, deleteMedia } from "@/src/lib/media";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
@@ -260,13 +262,44 @@ export default function AdminProductsPage() {
     };
   }, [showToast]);
 
+  // Fuzzy, multi-field, typo-tolerant search — the same Fuse.js index the
+  // storefront search uses, rather than the old `.name.includes(query)`
+  // substring check (exact match only, name only, no typo tolerance).
+  // buildSearchIndex/searchProducts already handle: fuzzy name matching,
+  // size tokens ("m", "42"), and color tokens ("black", "olive") — see
+  // src/lib/search.ts for the matching logic.
+  const searchIndex = useMemo(() => buildSearchIndex(products), [products]);
+
+  // buildSearchIndex only indexes each product's `categorySlug`, not the
+  // category's display name — so typing "hood" wouldn't surface every
+  // product in "Hoodies" unless a product's own name happened to contain
+  // that text. This is a second, small fuzzy index purely over category
+  // names, whose matches get unioned with the product-level search results
+  // below — so a category-name query still returns every product in it.
+  const categoryNameFuse = useMemo(
+    () => new Fuse(categories, { keys: ["name"], threshold: 0.35, ignoreLocation: true, minMatchCharLength: 2 }),
+    [categories]
+  );
+
   const filtered = useMemo(() => {
-    return products.filter((p) => {
-      const matchesQuery = p.name.toLowerCase().includes(query.toLowerCase());
-      const matchesCategory = categoryFilter === "all" || p.categorySlug === categoryFilter;
-      return matchesQuery && matchesCategory;
-    });
-  }, [products, query, categoryFilter]);
+    const q = query.trim();
+    let list: Product[];
+
+    if (q.length === 0) {
+      list = products;
+    } else {
+      const matchedProductIds = new Set(
+        searchProducts(q, products, searchIndex, products.length).map((r) => r.product.id)
+      );
+      const matchedCategorySlugs = new Set(categoryNameFuse.search(q).map((r) => r.item.slug));
+      list = products.filter((p) => matchedProductIds.has(p.id) || matchedCategorySlugs.has(p.categorySlug));
+    }
+
+    if (categoryFilter !== "all") {
+      list = list.filter((p) => p.categorySlug === categoryFilter);
+    }
+    return list;
+  }, [products, query, categoryFilter, searchIndex, categoryNameFuse]);
 
   function openAdd() {
     pendingUploadsRef.current = [];
@@ -671,14 +704,24 @@ export default function AdminProductsPage() {
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <div className="flex flex-1 items-center gap-2 rounded-full border border-white/10 bg-surface px-4 py-2.5">
+        <div className="flex flex-1 items-center gap-2 rounded-full border border-white/10 bg-surface px-4 py-2.5 focus-within:border-accent/50">
           <Search size={15} className="text-muted" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search products…"
+            placeholder="Search by name, category, color, size…"
             className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none"
           />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="shrink-0 text-muted hover:text-ink"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
         <select
           value={categoryFilter}
@@ -825,7 +868,11 @@ export default function AdminProductsPage() {
           );
         })}
         {filtered.length === 0 && (
-          <p className="col-span-full py-14 text-center font-body text-sm text-muted">No products match your filters.</p>
+          <p className="col-span-full py-14 text-center font-body text-sm text-muted">
+            {query.trim()
+              ? `No products match "${query.trim()}" — try a different name, category, color, or size.`
+              : "No products match your filters."}
+          </p>
         )}
       </div>
 
