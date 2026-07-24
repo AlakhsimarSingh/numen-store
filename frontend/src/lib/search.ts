@@ -7,6 +7,14 @@ export interface SearchIndex {
   sizeVocab: Set<string>;
 }
 
+// Characters that mean something special to Fuse's extended-search syntax
+// (' = exact match, ^ = starts-with, $ = ends-with, ! = exclude,
+// = = strict equals, | = OR). Stripped from the raw query before
+// tokenizing so a shopper who happens to type one of these — an apostrophe
+// in "levi's", a stray "!" — gets plain literal-word matching instead of
+// accidentally invoking search syntax they didn't intend.
+const EXTENDED_SEARCH_SYNTAX_CHARS = /['"^$=!|]/g;
+
 /** Rebuilt whenever the product list changes — cheap at catalog sizes up to a few thousand. */
 export function buildSearchIndex(products: Product[]): SearchIndex {
   const colorVocab = new Set<string>();
@@ -22,6 +30,16 @@ export function buildSearchIndex(products: Product[]): SearchIndex {
     threshold: 0.35,
     ignoreLocation: true,
     minMatchCharLength: 2,
+    // Extended search changes how a multi-word query is interpreted: by
+    // default Fuse treats the WHOLE query string as one fuzzy pattern, so
+    // "nike black" searched against "Nike Airforce Core Black" scores
+    // badly (the words aren't adjacent) even though both are clearly
+    // present. With extended search on, space-separated words become
+    // independent fuzzy patterns ANDed together — every word has to be
+    // found *somewhere* in the field, in any order — which is what lets
+    // someone who only half-remembers a product ("nike black", "nike
+    // airforce") still find "Nike Airforce Core Black".
+    useExtendedSearch: true,
     keys: [
       { name: "name", weight: 0.7 },
       { name: "categorySlug", weight: 0.3 },
@@ -38,7 +56,12 @@ export interface ParsedQuery {
 }
 
 export function parseQuery(query: string, index: SearchIndex): ParsedQuery {
-  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const tokens = query
+    .toLowerCase()
+    .replace(EXTENDED_SEARCH_SYNTAX_CHARS, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   const sizeTokens: string[] = [];
   const colorTokens: string[] = [];
   const freeTokens: string[] = [];
