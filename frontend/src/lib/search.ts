@@ -15,6 +15,11 @@ export interface SearchIndex {
 // accidentally invoking search syntax they didn't intend.
 const EXTENDED_SEARCH_SYNTAX_CHARS = /['"^$=!|]/g;
 
+// Fuse's fuzzy matcher can't reliably work with patterns shorter than
+// this — kept as one constant so the Fuse config below and the token
+// splitting in parseQuery() can never drift out of sync with each other.
+const MIN_FUZZY_TOKEN_LENGTH = 2;
+
 /** Rebuilt whenever the product list changes — cheap at catalog sizes up to a few thousand. */
 export function buildSearchIndex(products: Product[]): SearchIndex {
   const colorVocab = new Set<string>();
@@ -29,7 +34,7 @@ export function buildSearchIndex(products: Product[]): SearchIndex {
     includeScore: true,
     threshold: 0.35,
     ignoreLocation: true,
-    minMatchCharLength: 2,
+    minMatchCharLength: MIN_FUZZY_TOKEN_LENGTH,
     // Extended search changes how a multi-word query is interpreted: by
     // default Fuse treats the WHOLE query string as one fuzzy pattern, so
     // "nike black" searched against "Nike Airforce Core Black" scores
@@ -51,6 +56,11 @@ export function buildSearchIndex(products: Product[]): SearchIndex {
 
 export interface ParsedQuery {
   freeText: string;
+  // Tokens shorter than Fuse can reliably fuzzy-match (e.g. the "1" in
+  // "Air Force 1", the "3" in "Jordan 3") — checked as plain substrings
+  // instead of being handed to Fuse, where they'd silently break the
+  // whole extended-search AND clause.
+  shortTokens: string[];
   sizeTokens: string[];
   colorTokens: string[];
 }
@@ -65,18 +75,21 @@ export function parseQuery(query: string, index: SearchIndex): ParsedQuery {
   const sizeTokens: string[] = [];
   const colorTokens: string[] = [];
   const freeTokens: string[] = [];
+  const shortTokens: string[] = [];
 
   for (const t of tokens) {
     if (index.sizeVocab.has(t)) {
       sizeTokens.push(t);
     } else if (index.colorVocab.has(t)) {
       colorTokens.push(t);
+    } else if (t.length < MIN_FUZZY_TOKEN_LENGTH) {
+      shortTokens.push(t);
     } else {
       freeTokens.push(t);
     }
   }
 
-  return { freeText: freeTokens.join(" "), sizeTokens, colorTokens };
+  return { freeText: freeTokens.join(" "), shortTokens, sizeTokens, colorTokens };
 }
 
 export interface MatchedColor {
@@ -111,9 +124,19 @@ function stockForSize(product: Product, size: string): number | undefined {
 }
 
 export function searchProducts(query: string, products: Product[], index: SearchIndex, limit = 8): SearchResult[] {
-  const { freeText, sizeTokens, colorTokens } = parseQuery(query, index);
+  const { freeText, shortTokens, sizeTokens, colorTokens } = parseQuery(query, index);
 
   let candidates: Product[] = freeText.length > 0 ? index.fuse.search(freeText).map((r) => r.item) : products;
+
+  // Short tokens bypass Fuse entirely — matched as plain case-insensitive
+  // substrings of the product name, required alongside whatever the fuzzy
+  // free-text search already narrowed things down to.
+  if (shortTokens.length > 0) {
+    candidates = candidates.filter((p) => {
+      const name = p.name.toLowerCase();
+      return shortTokens.every((t) => name.includes(t));
+    });
+  }
 
   if (sizeTokens.length > 0) {
     candidates = candidates.filter((p) => sizeTokens.every((sz) => p.sizes?.some((s) => s.toLowerCase() === sz)));
@@ -125,7 +148,7 @@ export function searchProducts(query: string, products: Product[], index: Search
     );
   }
 
-  if (freeText.length === 0) {
+  if (freeText.length === 0 && shortTokens.length === 0) {
     candidates = [...candidates].sort((a, b) => Number(b.isNew) - Number(a.isNew) || b.rating - a.rating);
   }
 
