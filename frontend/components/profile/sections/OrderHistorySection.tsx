@@ -6,7 +6,8 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { Loader2, Package } from "lucide-react";
 import { fetchOrders, Order } from "@/src/lib/orders";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
+import { useFormatPrice } from "@/src/hooks/useFormatPrice";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -27,6 +28,7 @@ const statusStyle: Record<Order["status"], string> = {
 export default function OrderHistorySection() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const formatPrice = useFormatPrice();
 
   useEffect(() => {
     fetchOrders()

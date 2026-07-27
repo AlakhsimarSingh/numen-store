@@ -10,7 +10,6 @@ import { cn } from "@/src/lib/utils";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useRecentlyViewedStore } from "@/src/hooks/useRecentlyViewedStore";
 import { useToastStore } from "@/src/hooks/useToastStore";
-import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import { computeRatingSummary, fetchProductReviews, Review } from "@/src/lib/reviews";
 import { StarRatingDisplay } from "./StarRating";
 import SizeGuideModal from "./SizeGuideModal";
@@ -37,9 +36,16 @@ const GLITCH_DURATION_MS = 420;
 export default function ProductDetail({
   product,
   categoryName,
+  freeShippingThreshold,
 }: {
   product: Product;
   categoryName: string;
+  // Passed down from the server component (fetchSiteSettingsForServer) so
+  // this renders correctly on first paint for every visitor, instead of
+  // reading the client-only, localStorage-persisted useSiteSettingsStore
+  // (which is stale/default until SiteSettingsHydrator fetches post-mount,
+  // and isn't available at all during SSR).
+  freeShippingThreshold: number;
 }) {
   const hasRealColors = !!product.colors && product.colors.some((c) => c.name !== "Default");
   const colors = product.colors ?? [];
@@ -54,7 +60,6 @@ export default function ProductDetail({
   const addItem = useCartStore((s) => s.addItem);
   const showToast = useToastStore((s) => s.show);
   const addView = useRecentlyViewedStore((s) => s.addView);
-  const freeShippingThreshold = useSiteSettingsStore((s) => s.freeShippingThreshold);
 
   useEffect(() => {
     addView(product.id);

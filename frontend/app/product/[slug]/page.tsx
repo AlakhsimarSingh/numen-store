@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { fetchProductBySlugServer, fetchProductsServer, fetchCategoriesServer } from "@/src/lib/serverApi";
+import { fetchSiteSettingsForServer } from "@/src/lib/site-settings";
 import ProductDetail from "@/components/product/ProductDetail";
 import ProductCard from "@/components/ProductCard";
 
@@ -30,7 +31,11 @@ export default async function ProductPage({
   const product = await fetchProductBySlugServer(slug);
   if (!product) return notFound();
 
-  const [categories, allProducts] = await Promise.all([fetchCategoriesServer(), fetchProductsServer()]);
+  const [categories, allProducts, siteSettings] = await Promise.all([
+    fetchCategoriesServer(),
+    fetchProductsServer(),
+    fetchSiteSettingsForServer(),
+  ]);
   const category = categories.find((c) => c.slug === product.categorySlug);
 
   const related = allProducts
@@ -39,7 +44,11 @@ export default async function ProductPage({
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
-      <ProductDetail product={product} categoryName={category?.name ?? product.categorySlug} />
+      <ProductDetail
+        product={product}
+        categoryName={category?.name ?? product.categorySlug}
+        freeShippingThreshold={siteSettings.freeShippingThreshold}
+      />
 
       {related.length > 0 && (
         <div className="mt-20">

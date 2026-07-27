@@ -8,8 +8,9 @@ import { motion } from "framer-motion";
 import { Check, ChevronLeft, Loader2, Package, RotateCcw, Truck, XCircle } from "lucide-react";
 import { useRequireAuth } from "@/src/hooks/useRequireAuth";
 import { fetchOrder, Order, OrderStatus } from "@/src/lib/orders";
-import { formatPrice, cn } from "@/src/lib/utils";
+import { cn } from "@/src/lib/utils";
 import ReturnRequestModal from "@/components/account/ReturnRequestModal";
+import { useFormatPrice } from "@/src/hooks/useFormatPrice";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -35,6 +36,7 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
+  const formatPrice = useFormatPrice();
 
   useEffect(() => {
     if (!ready || !params.id) return;
