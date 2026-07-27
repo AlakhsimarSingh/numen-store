@@ -20,6 +20,11 @@ const EXTENDED_SEARCH_SYNTAX_CHARS = /['"^$=!|]/g;
 // splitting in parseQuery() can never drift out of sync with each other.
 const MIN_FUZZY_TOKEN_LENGTH = 2;
 
+// Color names in a real catalog are usually multi-word ("Bright Red",
+// "Racer Red", "Off White"). This is the longest phrase (in words) we'll
+// try to match against colorVocab before falling back to shorter spans.
+const MAX_COLOR_PHRASE_WORDS = 3;
+
 /** Rebuilt whenever the product list changes — cheap at catalog sizes up to a few thousand. */
 export function buildSearchIndex(products: Product[]): SearchIndex {
   const colorVocab = new Set<string>();
@@ -65,28 +70,73 @@ export interface ParsedQuery {
   colorTokens: string[];
 }
 
+/**
+ * Looks for the longest run of consecutive words (starting at `start`)
+ * that appears as a substring of some entry in `vocab`. This is what lets
+ * "red" match a catalog color of "Bright Red", and lets "off white" be
+ * pulled out as one color token instead of being split into two free-text
+ * words that would each fuzzy-match against the wrong field.
+ *
+ * Tries longer phrases first so "denim blue" (if that's a real color)
+ * wins over matching just "blue" and leaving "denim" stranded.
+ */
+function longestVocabMatch(
+  words: string[],
+  start: number,
+  vocab: Set<string>,
+  maxPhraseWords: number
+): { text: string; span: number } | null {
+  const maxSpan = Math.min(maxPhraseWords, words.length - start);
+  for (let span = maxSpan; span >= 1; span--) {
+    const candidate = words.slice(start, start + span).join(" ");
+    if (candidate.length < MIN_FUZZY_TOKEN_LENGTH) continue;
+    for (const entry of vocab) {
+      if (entry.includes(candidate)) {
+        return { text: candidate, span };
+      }
+    }
+  }
+  return null;
+}
+
 export function parseQuery(query: string, index: SearchIndex): ParsedQuery {
-  const tokens = query
+  const words = query
     .toLowerCase()
     .replace(EXTENDED_SEARCH_SYNTAX_CHARS, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean);
+
   const sizeTokens: string[] = [];
   const colorTokens: string[] = [];
   const freeTokens: string[] = [];
   const shortTokens: string[] = [];
 
-  for (const t of tokens) {
-    if (index.sizeVocab.has(t)) {
-      sizeTokens.push(t);
-    } else if (index.colorVocab.has(t)) {
-      colorTokens.push(t);
-    } else if (t.length < MIN_FUZZY_TOKEN_LENGTH) {
+  let i = 0;
+  while (i < words.length) {
+    // Try color first (colors are more often multi-word / descriptive than sizes).
+    const colorMatch = longestVocabMatch(words, i, index.colorVocab, MAX_COLOR_PHRASE_WORDS);
+    if (colorMatch) {
+      colorTokens.push(colorMatch.text);
+      i += colorMatch.span;
+      continue;
+    }
+
+    // Sizes are effectively always single tokens ("9", "xl", "42").
+    const sizeMatch = longestVocabMatch(words, i, index.sizeVocab, 1);
+    if (sizeMatch) {
+      sizeTokens.push(sizeMatch.text);
+      i += sizeMatch.span;
+      continue;
+    }
+
+    const t = words[i];
+    if (t.length < MIN_FUZZY_TOKEN_LENGTH) {
       shortTokens.push(t);
     } else {
       freeTokens.push(t);
     }
+    i++;
   }
 
   return { freeText: freeTokens.join(" "), shortTokens, sizeTokens, colorTokens };
