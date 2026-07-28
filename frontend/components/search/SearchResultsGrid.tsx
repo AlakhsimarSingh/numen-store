@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { PackageX, Search } from "lucide-react";
 import { Product } from "@/src/types";
 import { Category } from "@/src/lib/categories";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
@@ -13,8 +13,10 @@ import { buildPriceBands } from "@/src/lib/priceBands";
 import ProductCard from "@/components/ProductCard";
 import { DesktopFilterAside, MobileFilterButton } from "@/components/shop/FilterSidebar";
 import { SortMenu, type SortOption } from "@/components/shop/SortMenu";
+import { cn } from "@/src/lib/utils";
 
 type SortKey = "relevance" | "newest" | "price-asc" | "price-desc" | "rating" | "discount" | "name-asc";
+type ResultTab = "available" | "outOfStock";
 
 const SORT_OPTIONS: SortOption<SortKey>[] = [
   { value: "relevance", label: "Relevance" },
@@ -27,6 +29,24 @@ const SORT_OPTIONS: SortOption<SortKey>[] = [
 ];
 
 const PAGE_SIZE = 24;
+
+// Grayscale + dimmed wrapper for out-of-stock cards, with a full-width
+// banner pinned across the top of whatever ProductCard renders (doesn't
+// depend on knowing its internal layout to stay visible).
+// `pointer-events-none` on the banner keeps the card itself still
+// clickable — someone may still want to view details or come back later.
+function OutOfStockCard({ product }: { product: Product }) {
+  return (
+    <div className="relative grayscale">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-accent2/95 py-1 text-center font-mono text-[9px] font-bold uppercase tracking-widest text-ink shadow-md">
+        Out of Stock
+      </div>
+      <div className="opacity-60">
+        <ProductCard product={product} />
+      </div>
+    </div>
+  );
+}
 
 export default function SearchResultsGrid({
   initialProducts,
@@ -47,6 +67,10 @@ export default function SearchResultsGrid({
   const [activeSizes, setActiveSizes] = useState<string[]>([]);
   const [priceBand, setPriceBand] = useState(0);
   const [newOnly, setNewOnly] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<ResultTab>(() =>
+    searchParams.get("tab") === "out-of-stock" ? "outOfStock" : "available"
+  );
   const [page, setPage] = useState(() => {
     const p = parseInt(searchParams.get("page") ?? "1", 10);
     return Number.isFinite(p) && p > 0 ? p : 1;
@@ -163,31 +187,63 @@ export default function SearchResultsGrid({
     sortBy,
   ]);
 
+  // Split into available vs. out-of-stock — always, regardless of sort —
+  // so a sold-out product can never outrank an in-stock one just because
+  // it happens to be newer/cheaper/higher-rated. filter() preserves
+  // relative order, so each group still reflects whatever sort was picked
+  // above; this only changes which GROUP a product lands in.
+  const inStockResults = useMemo(() => filtered.filter((p) => p.stock > 0), [filtered]);
+  const outOfStockResults = useMemo(() => filtered.filter((p) => p.stock === 0), [filtered]);
+
+  // Auto-land on whichever tab actually has something to show — most
+  // importantly, if a search turns up nothing in stock, jump straight to
+  // the Out of Stock tab instead of leaving the customer on an empty
+  // "Available" view with no reason to think to check the other tab.
+  // Only fires when the CURRENT tab has nothing, so it never fights an
+  // explicit choice to view a tab that still has results.
+  useEffect(() => {
+    if (activeTab === "available" && inStockResults.length === 0 && outOfStockResults.length > 0) {
+      setActiveTab("outOfStock");
+    } else if (activeTab === "outOfStock" && outOfStockResults.length === 0 && inStockResults.length > 0) {
+      setActiveTab("available");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inStockResults.length, outOfStockResults.length]);
+
   useEffect(() => {
     setPage(1);
-  }, [q, sortBy, activeCategory, activeSizes, priceBand, newOnly]);
+  }, [q, sortBy, activeCategory, activeSizes, priceBand, newOnly, activeTab]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const activeList = activeTab === "available" ? inStockResults : outOfStockResults;
+  const totalPages = Math.max(1, Math.ceil(activeList.length / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+  const pageItems = activeList.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
 
-  function updateUrl(nextQuery: string, nextPage: number) {
+  function updateUrl(nextQuery: string, nextPage: number, nextTab: ResultTab) {
     const params = new URLSearchParams();
     if (nextQuery) params.set("q", nextQuery);
+    if (nextTab === "outOfStock") params.set("tab", "out-of-stock");
     if (nextPage > 1) params.set("page", String(nextPage));
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function switchTab(tab: ResultTab) {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    setPage(1);
+    updateUrl(q, 1, tab);
   }
 
   function goToPage(p: number) {
     const next = Math.min(Math.max(1, p), totalPages);
     setPage(next);
-    updateUrl(q, next);
+    updateUrl(q, next, activeTab);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
-    updateUrl(query.trim(), 1);
+    updateUrl(query.trim(), 1, activeTab);
   }
 
   function resetFilters() {
@@ -211,7 +267,7 @@ export default function SearchResultsGrid({
     newOnly,
     onToggleNewOnly: () => setNewOnly((v) => !v),
     onReset: resetFilters,
-    resultCount: filtered.length,
+    resultCount: activeList.length,
   };
 
   return (
@@ -228,33 +284,75 @@ export default function SearchResultsGrid({
 
       {q.length === 0 ? (
         <p className="py-16 text-center font-body text-sm text-muted">Start typing above to search the catalog.</p>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-20 text-center">
+          <p className="font-body text-sm text-muted">
+            No products match &ldquo;{query}&rdquo; with these filters.
+          </p>
+          <button
+            onClick={resetFilters}
+            className="rounded-full border border-accent/40 px-4 py-1.5 font-body text-xs text-accent hover:bg-accent hover:text-bg"
+          >
+            Reset filters
+          </button>
+        </div>
       ) : (
-        <div className="lg:flex lg:items-start lg:gap-8">
-          <div className="min-w-0 flex-1">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-6">
-              <MobileFilterButton {...filterProps} />
-              <div className="ml-auto flex items-center gap-3">
-                <span className="font-mono text-xs text-muted">{filtered.length} results</span>
-                <SortMenu value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
-              </div>
+        <>
+          {/* Tabs — the actual fix. Always visible right below the search
+              bar, so out-of-stock results are one click away rather than a
+              long scroll down, and impossible to just not notice. */}
+          {outOfStockResults.length > 0 && (
+            <div className="mb-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => switchTab("available")}
+                className={cn(
+                  "rounded-full border px-4 py-2 font-body text-xs font-semibold transition-colors",
+                  activeTab === "available"
+                    ? "border-accent bg-accent text-bg"
+                    : "border-white/10 text-muted hover:text-ink"
+                )}
+              >
+                Available ({inStockResults.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => switchTab("outOfStock")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-4 py-2 font-body text-xs font-semibold transition-colors",
+                  activeTab === "outOfStock"
+                    ? "border-accent2 bg-accent2 text-ink"
+                    : "border-white/10 text-muted hover:text-ink"
+                )}
+              >
+                <PackageX size={13} />
+                Out of Stock ({outOfStockResults.length})
+              </button>
             </div>
+          )}
 
-            {filtered.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-20 text-center">
-                <p className="font-body text-sm text-muted">
-                  No products match &ldquo;{query}&rdquo; with these filters.
-                </p>
-                <button
-                  onClick={resetFilters}
-                  className="rounded-full border border-accent/40 px-4 py-1.5 font-body text-xs text-accent hover:bg-accent hover:text-bg"
-                >
-                  Reset filters
-                </button>
+          <div className="lg:flex lg:items-start lg:gap-8">
+            <div className="min-w-0 flex-1">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-white/5 pb-6">
+                <MobileFilterButton {...filterProps} />
+                <div className="ml-auto flex items-center gap-3">
+                  <span className="font-mono text-xs text-muted">{activeList.length} results</span>
+                  <SortMenu value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
+                </div>
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                  {pageItems.map((product, i) => (
+
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {pageItems.map((product, i) =>
+                  activeTab === "outOfStock" ? (
+                    <motion.div
+                      key={product.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: (i % 8) * 0.05 }}
+                    >
+                      <OutOfStockCard product={product} />
+                    </motion.div>
+                  ) : (
                     <motion.div
                       key={product.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -263,36 +361,36 @@ export default function SearchResultsGrid({
                     >
                       <ProductCard product={product} />
                     </motion.div>
-                  ))}
-                </div>
-
-                {totalPages > 1 && (
-                  <div className="mt-10 flex items-center justify-center gap-2">
-                    <button
-                      onClick={() => goToPage(clampedPage - 1)}
-                      disabled={clampedPage <= 1}
-                      className="rounded-full border border-white/10 px-4 py-1.5 font-mono text-xs text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Prev
-                    </button>
-                    <span className="font-mono text-xs text-muted">
-                      Page {clampedPage} of {totalPages}
-                    </span>
-                    <button
-                      onClick={() => goToPage(clampedPage + 1)}
-                      disabled={clampedPage >= totalPages}
-                      className="rounded-full border border-white/10 px-4 py-1.5 font-mono text-xs text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Next
-                    </button>
-                  </div>
+                  )
                 )}
-              </>
-            )}
-          </div>
+              </div>
 
-          <DesktopFilterAside {...filterProps} />
-        </div>
+              {totalPages > 1 && (
+                <div className="mt-10 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => goToPage(clampedPage - 1)}
+                    disabled={clampedPage <= 1}
+                    className="rounded-full border border-white/10 px-4 py-1.5 font-mono text-xs text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <span className="font-mono text-xs text-muted">
+                    Page {clampedPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => goToPage(clampedPage + 1)}
+                    disabled={clampedPage >= totalPages}
+                    className="rounded-full border border-white/10 px-4 py-1.5 font-mono text-xs text-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <DesktopFilterAside {...filterProps} />
+          </div>
+        </>
       )}
     </div>
   );
