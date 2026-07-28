@@ -77,7 +77,7 @@ export default function ContactPage() {
               </div>
               <div>
                 <p className="font-body text-xs text-muted">Email</p>
-                <p className="font-body text-sm text-ink">support@numen.store</p>
+                <p className="font-body text-sm text-ink">nmnnumen@gmail.com</p>
               </div>
             </div>
           </div>
@@ -88,7 +88,7 @@ export default function ContactPage() {
               </div>
               <div>
                 <p className="font-body text-xs text-muted">Phone</p>
-                <p className="font-body text-sm text-ink">+1 (800) 555-0136</p>
+                <p className="font-body text-sm text-ink">+91 70096 12811</p>
               </div>
             </div>
           </div>
@@ -99,7 +99,7 @@ export default function ContactPage() {
               </div>
               <div>
                 <p className="font-body text-xs text-muted">Studio</p>
-                <p className="font-body text-sm text-ink">Ludhiana, Punjab, India</p>
+                <p className="font-body text-sm text-ink">Jalandhar, Punjab, India</p>
               </div>
             </div>
           </div>
