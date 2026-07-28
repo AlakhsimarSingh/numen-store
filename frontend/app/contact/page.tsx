@@ -154,7 +154,7 @@ export default function ContactPage() {
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Alex Rivera"
+                      placeholder="Enter your full name"
                       className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none"
                     />
                   </div>
