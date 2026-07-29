@@ -10,12 +10,18 @@ interface CartState {
   clearCart: () => void;
   totalItems: () => number;
   totalPrice: () => number;
+  totalWeight: () => number;
 }
 
 function buildLineId(productId: string, variant?: { color?: string; size?: string }) {
   if (!variant || (!variant.color && !variant.size)) return productId;
   return `${productId}::${variant.color ?? "-"}::${variant.size ?? "-"}`;
 }
+
+// Default used only as a fallback for cart lines persisted before the
+// `weight` field existed on CartItem — new lines always get a real value
+// from the product.
+const FALLBACK_ITEM_WEIGHT_KG = 0.3;
 
 export const useCartStore = create<CartState>()(
   persist(
@@ -45,6 +51,7 @@ export const useCartStore = create<CartState>()(
                 compareAtPrice: product.compareAtPrice,
                 regionalPrices: product.regionalPrices,
                 image: product.image,
+                weight: product.weight ?? FALLBACK_ITEM_WEIGHT_KG,
                 qty,
                 color: variant?.color,
                 size: variant?.size,
@@ -60,6 +67,8 @@ export const useCartStore = create<CartState>()(
       clearCart: () => set({ items: [] }),
       totalItems: () => get().items.reduce((sum, i) => sum + i.qty, 0),
       totalPrice: () => get().items.reduce((sum, i) => sum + i.price * i.qty, 0),
+      totalWeight: () =>
+        get().items.reduce((sum, i) => sum + (i.weight ?? FALLBACK_ITEM_WEIGHT_KG) * i.qty, 0),
     }),
     { name: "numen-cart" }
   )

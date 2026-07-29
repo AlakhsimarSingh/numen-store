@@ -26,12 +26,14 @@ export default function ReviewPage() {
 
   const items = useCartStore((s) => s.items);
   const clearCart = useCartStore((s) => s.clearCart);
+  const totalWeightKgFallback = useCartStore((s) => s.totalWeight());
   const user = useAuthStore((s) => s.user);
 
   const shipping = useCheckoutStore((s) => s.shipping);
   const paymentMethod = useCheckoutStore((s) => s.paymentMethod);
   const promoCode = useCheckoutStore((s) => s.promoCode);
   const discountPercent = useCheckoutStore((s) => s.discountPercent);
+  const confirmedTotals = useCheckoutStore((s) => s.confirmedTotals);
   const applyPromo = useCheckoutStore((s) => s.applyPromo);
   const placeOrder = useCheckoutStore((s) => s.placeOrder);
 
@@ -75,14 +77,25 @@ export default function ReviewPage() {
   const subtotal = lineDisplays.reduce((sum, { item, display }) => sum + display.price * item.qty, 0);
   const anyEstimated = lineDisplays.some(({ display }) => display.estimated);
 
-  const { discount, shippingFee, tax, codFee, total } = computeTotals({
-    subtotal,
-    discountPercent,
-    paymentMethod,
-    settings: shippingSettings,
-    currency,
-    rates,
-  });
+  // The Payment step locks in the real, weight- and destination-aware
+  // totals (see setConfirmedTotals). Use that directly rather than
+  // recomputing — it's the number the shopper is about to confirm/pay, and
+  // recomputing here could drift from it if rates or settings changed in
+  // between. The recompute below only runs as a safety net for the edge
+  // case of landing on Review without having gone through Payment in this
+  // session (e.g. a stale bookmark/back-forward-cache restore).
+  const { discount, shippingFee, tax, codFee, total } = confirmedTotals
+    ? confirmedTotals
+    : computeTotals({
+        subtotal,
+        discountPercent,
+        paymentMethod,
+        settings: shippingSettings,
+        currency,
+        rates,
+        totalWeightKg: totalWeightKgFallback,
+        destinationPincode: shipping.zip,
+      });
 
   async function handleApplyPromo() {
     setPromoApplying(true);
@@ -262,6 +275,12 @@ export default function ReviewPage() {
               {promoError && <p className="mt-1.5 font-mono text-[11px] text-accent2">{promoError}</p>}
               {discountPercent > 0 && !promoError && (
                 <p className="mt-1.5 font-mono text-[11px] text-accent">{discountPercent}% off applied ({promoCode.toUpperCase()})</p>
+              )}
+              {discountPercent > 0 && !confirmedTotals && (
+                <p className="mt-1.5 font-mono text-[10px] text-muted">
+                  Re-applying a code here updates the discount shown, but won&apos;t affect shipping — go back to
+                  Payment to lock in a fresh total first.
+                </p>
               )}
             </div>
 

@@ -1,15 +1,5 @@
 import { Product } from "@/src/types";
 
-// Reads a fetch Response as text first, then attempts to parse it as JSON,
-// instead of calling res.json() directly. res.json() throws its own raw
-// parse error (e.g. "Unexpected token 'A'...") if the body isn't valid
-// JSON at all — which happens whenever the server returns something other
-// than our own API's response, most commonly a platform-level timeout or
-// crashed-function error page. That raw parse error explains nothing to
-// whoever reads it and looks like an application bug when it's usually an
-// infra timeout. This surfaces something actually actionable instead, and
-// is the single place all the API helpers below funnel through so none of
-// them can regress back to the old behavior individually.
 async function parseJsonOrThrow<T>(res: Response, fallbackMessage: string): Promise<T> {
   const text = await res.text();
   let data: unknown = null;
@@ -77,6 +67,7 @@ export interface BulkProductRow {
   image?: string;
   images?: string[];
   stock?: number | string;
+  weight?: number | string;
   sizes?: string[];
   isNew?: boolean;
   isSpotlight?: boolean;
@@ -97,4 +88,48 @@ export async function bulkCreateProducts(products: BulkProductRow[]): Promise<Bu
     body: JSON.stringify({ products }),
   });
   return parseJsonOrThrow<BulkCreateResult>(res, "Bulk import failed.");
+}
+
+// ---- Bulk EDIT (grid) support ----
+
+export interface BulkUpdateItem {
+  id: string;
+  updates: Record<string, unknown>;
+}
+
+export interface BulkUpdateResult {
+  updated: Product[];
+  errors: { id: string; error: string }[];
+}
+
+// Same reasoning as bulk delete's chunking: each updateProduct() call is
+// its own request, so batching a few at a time keeps any single burst of
+// in-flight work comfortably under serverless timeouts while still giving
+// the UI a progress checkpoint after every chunk.
+const BULK_UPDATE_CHUNK_SIZE = 4;
+
+export async function bulkUpdateProducts(
+  items: BulkUpdateItem[],
+  onProgress?: (done: number, total: number) => void
+): Promise<BulkUpdateResult> {
+  const updated: Product[] = [];
+  const errors: { id: string; error: string }[] = [];
+
+  for (let i = 0; i < items.length; i += BULK_UPDATE_CHUNK_SIZE) {
+    const chunk = items.slice(i, i + BULK_UPDATE_CHUNK_SIZE);
+    const results = await Promise.allSettled(chunk.map((it) => updateProduct(it.id, it.updates)));
+    results.forEach((res, idx) => {
+      if (res.status === "fulfilled") {
+        updated.push(res.value);
+      } else {
+        errors.push({
+          id: chunk[idx].id,
+          error: res.reason instanceof Error ? res.reason.message : "Update failed",
+        });
+      }
+    });
+    onProgress?.(Math.min(i + BULK_UPDATE_CHUNK_SIZE, items.length), items.length);
+  }
+
+  return { updated, errors };
 }

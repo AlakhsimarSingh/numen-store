@@ -64,6 +64,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  if (body.weight !== undefined) {
+    const weight = Number(body.weight);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      return NextResponse.json({ error: "Weight must be a positive number." }, { status: 400 });
+    }
+    data.weight = weight;
+  }
+
   if (body.image !== undefined) {
     const image = String(body.image).trim();
     if (!image) return NextResponse.json({ error: "Image cannot be empty." }, { status: 400 });
@@ -98,7 +106,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data.regionalPrices = body.regionalPrices && typeof body.regionalPrices === "object" ? body.regionalPrices : null;
   }
 
-  // Recompute stock authoritatively whenever anything stock-related changed.
   if (
     body.stock !== undefined ||
     body.colors !== undefined ||
@@ -109,13 +116,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const finalSizes = (data.sizes ?? existing.sizes) as string[];
     const hasVariants = (finalColors?.length ?? 0) > 0 || (finalSizes?.length ?? 0) > 0;
 
-    // Server is authoritative here, not just "if the client happened to
-    // send variantStock": if colors/sizes were just cleared, variantStock
-    // MUST be cleared too, even if the request omitted the key entirely
-    // (which it does whenever hasVariants becomes false on the admin
-    // form) — otherwise a stale variantStock blob from before the edit
-    // silently survives in the DB and causes every future lookup for this
-    // product to mismatch against its current (empty) colors/sizes.
     data.variantStock = hasVariants ? (data.variantStock ?? existing.variantStock) : null;
 
     data.stock = computeStock({
@@ -126,19 +126,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
   }
 
-  // Slug tracks the name: regenerate it whenever the name changes, so a
-  // renamed product isn't stuck on the slug it was first created with.
-  // The product's own current row is excluded from the collision check so
-  // re-saving without actually changing the name (or changing it back to
-  // something that only collides with itself) doesn't grow a spurious
-  // "-2" suffix.
   if (data.name !== undefined && data.name !== existing.name) {
     data.slug = await generateUniqueSlug(data.name as string, existing.id);
   }
 
-  // SEO fields are fully automatic and never accepted from the client —
-  // regenerate them whenever any of their inputs (name, category, price,
-  // new/spotlight badges) changed in this request.
   const seoInputsChanged =
     data.name !== undefined ||
     data.categorySlug !== undefined ||
@@ -162,8 +153,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data.keywords = seo.keywords;
   }
 
-  // Work out which media URLs are being dropped by this update so we can
-  // reclaim the storage — Supabase free tier is limited, don't leak files.
   const mergedForDiff = {
     image: (data.image as string | undefined) ?? existing.image,
     images: (data.images as string[] | undefined) ?? existing.images,
@@ -178,7 +167,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const updated = await prisma.product.update({ where: { id: existing.id }, data });
 
     if (removedUrls.length > 0) {
-      // Best-effort — a storage hiccup should never fail the product update.
       deleteMediaByUrls(removedUrls).catch((err) => console.error("Storage cleanup failed:", err));
     }
 

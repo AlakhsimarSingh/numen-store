@@ -6,8 +6,14 @@ import { motion } from "framer-motion";
 import { Banknote, CreditCard, Loader2, ShieldCheck, Smartphone } from "lucide-react";
 import CheckoutProgress from "@/components/checkout/CheckoutProgress";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
+import { useCartStore } from "@/src/hooks/useCartStore";
+import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
+import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import { useRequireAuth } from "@/src/hooks/useRequireAuth";
 import { cn } from "@/src/lib/utils";
+import { computeTotals } from "@/src/lib/order";
+import { getDisplayPrice } from "@/src/lib/currency";
+import { useShallow } from "zustand/react/shallow";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -25,6 +31,24 @@ export default function PaymentPage() {
   const shipping = useCheckoutStore((s) => s.shipping);
   const setPaymentMethod = useCheckoutStore((s) => s.setPaymentMethod);
   const storedMethod = useCheckoutStore((s) => s.paymentMethod);
+  const setConfirmedTotals = useCheckoutStore((s) => s.setConfirmedTotals);
+  const promoCode = useCheckoutStore((s) => s.promoCode);
+  const discountPercent = useCheckoutStore((s) => s.discountPercent);
+
+  const items = useCartStore((s) => s.items);
+  const totalWeightKg = useCartStore((s) => s.totalWeight());
+
+  const currency = useCurrencyStore((s) => s.currency);
+  const rates = useCurrencyStore((s) => s.rates);
+
+  const shippingSettings = useSiteSettingsStore(
+    useShallow((s) => ({
+      freeShippingThreshold: s.freeShippingThreshold,
+      shippingFee: s.shippingFee,
+      taxRate: s.taxRate,
+      codFee: s.codFee,
+    }))
+  );
 
   const [method, setMethod] = useState<Method>(storedMethod ?? "card");
   const [submitting, setSubmitting] = useState(false);
@@ -44,8 +68,43 @@ export default function PaymentPage() {
   }
 
   function handleContinue() {
+    if (!shipping) return; // re-narrow: TS doesn't carry the outer check's narrowing into this closure
+
     setSubmitting(true);
     setPaymentMethod(method);
+
+    // Lock in the real totals right now: weight- and destination-aware
+    // shipping (using the shopper's confirmed shipping.zip, not the cart's
+    // optional pincode guess), the current promo discount, and a COD fee
+    // that only applies when the chosen method is actually "cod".
+    const subtotal = items.reduce((sum, item) => {
+      const display = getDisplayPrice(item, currency, rates);
+      return sum + display.price * item.qty;
+    }, 0);
+
+    const { discount, shippingFee, tax, codFee, total, shippingZone } = computeTotals({
+      subtotal,
+      discountPercent,
+      paymentMethod: method,
+      settings: shippingSettings,
+      currency,
+      rates,
+      totalWeightKg,
+      destinationPincode: shipping.zip,
+    });
+
+    setConfirmedTotals({
+      subtotal,
+      discount,
+      shippingFee,
+      shippingZone,
+      tax,
+      codFee,
+      total,
+      totalWeightKg,
+      destinationPincode: shipping.zip,
+    });
+
     setTimeout(() => {
       setSubmitting(false);
       router.push("/checkout/review");

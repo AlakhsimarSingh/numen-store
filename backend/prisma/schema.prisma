@@ -183,6 +183,7 @@ model Product {
   isNew          Boolean  @default(false)
   isSpotlight    Boolean  @default(false)
   rating         Float    @default(4.5)
+  weight         Float    @default(0.3)
 
   colors         Json?    // ColorOption[]
   sizes          String[] @default([])

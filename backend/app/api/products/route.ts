@@ -47,6 +47,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Weight defaults to 0.3kg when omitted — must be a positive number
+  // whenever the client does send one, since it directly drives shipping
+  // cost math and a zero/negative value would make shipping free or invalid.
+  let weight = 0.3;
+  if (body.weight !== undefined && body.weight !== null && body.weight !== "") {
+    weight = Number(body.weight);
+    if (!Number.isFinite(weight) || weight <= 0) {
+      return NextResponse.json({ error: "Weight must be a positive number." }, { status: 400 });
+    }
+  }
+
   const colors = Array.isArray(body.colors) ? body.colors : undefined;
   const sizes = Array.isArray(body.sizes) ? body.sizes.filter((s: unknown) => typeof s === "string") : [];
   const variantStock = Array.isArray(body.variantStock) ? body.variantStock : undefined;
@@ -60,9 +71,6 @@ export async function POST(req: NextRequest) {
   const stock = computeStock({ stock: Number(body.stock) || 0, colors, sizes, variantStock });
   const slug = await generateUniqueSlug(name);
 
-  // SEO fields are always derived server-side from the product's real data
-  // — the request body is never consulted for metaTitle/metaDescription/
-  // keywords, even if a client happened to send them.
   const seo = generateSeoFields({
     name,
     categoryName: category.name,
@@ -83,6 +91,7 @@ export async function POST(req: NextRequest) {
         images,
         video,
         stock,
+        weight,
         isNew,
         isSpotlight,
         rating,

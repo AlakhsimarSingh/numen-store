@@ -47,6 +47,10 @@ export function serializeProduct(p: Product) {
     images: p.images,
     video: p.video ?? undefined,
     stock: p.stock,
+    // Was missing entirely — every PATCH/GET response silently stripped
+    // weight, so admin edits appeared to "not save" even though the DB
+    // write succeeded. See bulk-edit "unsaved after save" bug.
+    weight: Number(p.weight),
     isNew: p.isNew,
     isSpotlight: p.isSpotlight,
     rating: p.rating,

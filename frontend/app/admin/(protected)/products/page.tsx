@@ -2,9 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import Fuse from "fuse.js";
-import { Check, CheckSquare, Loader2, Pencil, Plus, Search, Star, Trash2, UploadCloud, X } from "lucide-react";
+import {
+  Check,
+  CheckSquare,
+  LayoutGrid,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { fetchCategories, type Category } from "@/src/lib/categories";
 import { fetchProducts, createProduct, updateProduct, deleteProduct } from "@/src/lib/products";
 import { buildSearchIndex, searchProducts } from "@/src/lib/search";
@@ -12,19 +25,14 @@ import { uploadMedia, deleteMedia } from "@/src/lib/media";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { ColorOption, Product, VariantStockEntry } from "@/src/types";
+import { estimateProductShipping } from "@/src/lib/shipping";
 import { cn } from "@/src/lib/utils";
 import VariantsEditor from "@/components/admin/VariantsEditor";
+import ImageLightbox from "@/components/admin/ImageLightbox";
 import { useRouter } from "next/navigation";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-// Bulk delete is processed this many products at a time. Each deleteProduct()
-// call is its own request/serverless invocation, so keeping chunks small
-// caps how much work is in flight at once (avoiding pile-ups that could run
-// long) and gives us a natural checkpoint after every chunk to update
-// progress — rather than firing all deletes in one uncontrolled burst or
-// relying on a single request to handle the whole batch server-side, which
-// risks tripping Vercel's ~10s function timeout for larger selections.
 const BULK_DELETE_CHUNK_SIZE = 4;
 
 const formatBasePriceINR = (value: number) =>
@@ -39,11 +47,12 @@ type FormState = {
   categorySlug: string;
   price: string;
   compareAtPrice: string;
-  image: string; // main — required
-  hoverImage: string; // shown on card hover
-  thirdImage: string; // shown in product page gallery only
+  image: string;
+  hoverImage: string;
+  thirdImage: string;
   video: string;
   stock: string;
+  weight: string;
   isNew: boolean;
   isSpotlight: boolean;
   rating: string;
@@ -63,6 +72,7 @@ const emptyForm: FormState = {
   thirdImage: "",
   video: "",
   stock: "",
+  weight: "0.3",
   isNew: false,
   isSpotlight: false,
   rating: "4.5",
@@ -74,7 +84,6 @@ const emptyForm: FormState = {
 
 type ImageSlotKey = "image" | "hoverImage" | "thirdImage";
 
-// Splits an array into chunks of at most `size` items each, preserving order.
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -91,11 +100,9 @@ function ImageSlot({
   uploading,
   onUpload,
   onClear,
-  selected,
+  onView,
   dragOver,
   dragging,
-  pendingSwap,
-  onSlotClick,
   onDragStartSlot,
   onDragOverSlot,
   onDropSlot,
@@ -108,11 +115,9 @@ function ImageSlot({
   uploading: boolean;
   onUpload: (file: File | undefined) => void;
   onClear: () => void;
-  selected: boolean;
+  onView: () => void;
   dragOver: boolean;
   dragging: boolean;
-  pendingSwap: boolean;
-  onSlotClick: () => void;
   onDragStartSlot: (e: React.DragEvent) => void;
   onDragOverSlot: (e: React.DragEvent) => void;
   onDropSlot: (e: React.DragEvent) => void;
@@ -133,11 +138,10 @@ function ImageSlot({
           onDragOver={onDragOverSlot}
           onDrop={onDropSlot}
           onDragEnd={onDragEndSlot}
-          onClick={onSlotClick}
+          onClick={onView}
           className={cn(
-            "relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border bg-surface2 transition-all",
-            selected ? "border-accent ring-2 ring-inset ring-accent" : "border-white/10",
-            dragOver && !selected && "ring-2 ring-inset ring-accent/60",
+            "relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border bg-surface2 border-white/10 transition-all",
+            dragOver && "ring-2 ring-inset ring-accent/60",
             dragging && "opacity-30"
           )}
         >
@@ -157,17 +161,6 @@ function ImageSlot({
         <label
           onDragOver={onDragOverSlot}
           onDrop={onDropSlot}
-          onClick={(e) => {
-            // A swap is pending from another slot — complete it here instead
-            // of opening the native file picker. Only intercept the click
-            // when there's actually something to drop into this slot;
-            // otherwise let the label behave normally so uploading still
-            // works with no selection active.
-            if (pendingSwap) {
-              e.preventDefault();
-              onSlotClick();
-            }
-          }}
           className={cn(
             "flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed bg-bg text-muted transition-all hover:border-accent/40 hover:text-accent",
             dragOver ? "border-accent/60 ring-2 ring-inset ring-accent/60" : "border-white/15"
@@ -215,22 +208,17 @@ export default function AdminProductsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<ImageSlotKey | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const router = useRouter();
 
   const pendingUploadsRef = useRef<{ url: string; path: string }[]>([]);
 
-  // Same click-to-select-then-click-to-swap interaction as the bulk
-  // importer, applied here to the three fixed slots (image / hoverImage /
-  // thirdImage). Native drag-and-drop is layered on as a desktop
-  // convenience; both paths call swapImageSlots().
-  const [selectedImageSlot, setSelectedImageSlot] = useState<ImageSlotKey | null>(null);
   const [dragOverImageSlot, setDragOverImageSlot] = useState<ImageSlotKey | null>(null);
   const [draggingImageSlot, setDraggingImageSlot] = useState<ImageSlotKey | null>(null);
   const imageDragSourceRef = useRef<ImageSlotKey | null>(null);
 
-  // Multi-select + bulk delete for the product grid.
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -262,20 +250,8 @@ export default function AdminProductsPage() {
     };
   }, [showToast]);
 
-  // Fuzzy, multi-field, typo-tolerant search — the same Fuse.js index the
-  // storefront search uses, rather than the old `.name.includes(query)`
-  // substring check (exact match only, name only, no typo tolerance).
-  // buildSearchIndex/searchProducts already handle: fuzzy name matching,
-  // size tokens ("m", "42"), and color tokens ("black", "olive") — see
-  // src/lib/search.ts for the matching logic.
   const searchIndex = useMemo(() => buildSearchIndex(products), [products]);
 
-  // buildSearchIndex only indexes each product's `categorySlug`, not the
-  // category's display name — so typing "hood" wouldn't surface every
-  // product in "Hoodies" unless a product's own name happened to contain
-  // that text. This is a second, small fuzzy index purely over category
-  // names, whose matches get unioned with the product-level search results
-  // below — so a category-name query still returns every product in it.
   const categoryNameFuse = useMemo(
     () => new Fuse(categories, { keys: ["name"], threshold: 0.35, ignoreLocation: true, minMatchCharLength: 2 }),
     [categories]
@@ -306,7 +282,6 @@ export default function AdminProductsPage() {
     setEditingId(null);
     setForm({ ...emptyForm, categorySlug: categories[0]?.slug ?? "" });
     setTab("basic");
-    setSelectedImageSlot(null);
     setModalOpen(true);
   }
 
@@ -323,6 +298,7 @@ export default function AdminProductsPage() {
       thirdImage: p.images?.[1] ?? "",
       video: p.video ?? "",
       stock: String(p.stock),
+      weight: String(p.weight ?? 0.3),
       isNew: p.isNew,
       isSpotlight: p.isSpotlight,
       rating: String(p.rating),
@@ -337,7 +313,6 @@ export default function AdminProductsPage() {
       ),
     });
     setTab("basic");
-    setSelectedImageSlot(null);
     setModalOpen(true);
   }
 
@@ -345,7 +320,6 @@ export default function AdminProductsPage() {
     const toDelete = pendingUploadsRef.current;
     pendingUploadsRef.current = [];
     toDelete.forEach((u) => deleteMedia(u.path));
-    setSelectedImageSlot(null);
     setModalOpen(false);
   }
 
@@ -397,30 +371,9 @@ export default function AdminProductsPage() {
     }
   }
 
-  // Swaps whatever is in slot A with whatever is in slot B — including
-  // empty strings. Swapping into an empty slot leaves the source empty
-  // (a plain move); swapping between two filled slots exchanges them.
   function swapImageSlots(a: ImageSlotKey, b: ImageSlotKey) {
     if (a === b) return;
     setForm((f) => ({ ...f, [a]: f[b], [b]: f[a] }));
-  }
-
-  function handleImageSlotClick(key: ImageSlotKey) {
-    const hasImage = !!form[key];
-
-    if (!selectedImageSlot) {
-      if (!hasImage) return; // nothing to pick up from an empty slot
-      setSelectedImageSlot(key);
-      return;
-    }
-
-    if (selectedImageSlot === key) {
-      setSelectedImageSlot(null); // clicked the same slot again — deselect
-      return;
-    }
-
-    swapImageSlots(selectedImageSlot, key);
-    setSelectedImageSlot(null);
   }
 
   function handleImageDragStart(e: React.DragEvent, key: ImageSlotKey) {
@@ -431,7 +384,6 @@ export default function AdminProductsPage() {
     imageDragSourceRef.current = key;
     setDraggingImageSlot(key);
     e.dataTransfer.effectAllowed = "move";
-    // Firefox requires setData to be called for the drag to actually start.
     e.dataTransfer.setData("text/plain", "image-slot");
   }
 
@@ -459,11 +411,8 @@ export default function AdminProductsPage() {
 
   function imageSlotProps(key: ImageSlotKey) {
     return {
-      selected: selectedImageSlot === key,
       dragOver: dragOverImageSlot === key,
       dragging: draggingImageSlot === key,
-      pendingSwap: !!selectedImageSlot && selectedImageSlot !== key,
-      onSlotClick: () => handleImageSlotClick(key),
       onDragStartSlot: (e: React.DragEvent) => handleImageDragStart(e, key),
       onDragOverSlot: (e: React.DragEvent) => handleImageDragOver(e, key),
       onDropSlot: (e: React.DragEvent) => handleImageDrop(e, key),
@@ -491,7 +440,6 @@ export default function AdminProductsPage() {
         ])
     );
 
-    // Main image + up to two extras (hover, then a third gallery-only shot).
     const images = [form.hoverImage, form.thirdImage].filter(Boolean);
 
     const payload = {
@@ -503,6 +451,7 @@ export default function AdminProductsPage() {
       images,
       video: hasColors ? null : form.video || undefined,
       stock: aggregateStock,
+      weight: parseFloat(form.weight || "0.3"),
       isNew: form.isNew,
       isSpotlight: form.isSpotlight,
       rating: parseFloat(form.rating || "4.5"),
@@ -558,7 +507,7 @@ export default function AdminProductsPage() {
   function toggleSelectMode() {
     if (bulkDeleting) return;
     setSelectMode((v) => {
-      if (v) setSelectedIds(new Set()); // turning select mode off clears any selection
+      if (v) setSelectedIds(new Set());
       return !v;
     });
   }
@@ -583,13 +532,6 @@ export default function AdminProductsPage() {
     setSelectedIds(new Set());
   }
 
-  // Deletes every selected product, but never all at once. Requests go out
-  // BULK_DELETE_CHUNK_SIZE at a time — each chunk awaited (via
-  // Promise.allSettled, so one failure doesn't block the rest) before the
-  // next one starts. This keeps any single burst of work small enough to
-  // comfortably clear Vercel's serverless timeout, and gives the UI a
-  // natural checkpoint after every chunk to report progress and reflect
-  // completed deletions immediately rather than only at the very end.
   async function handleBulkDelete() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
@@ -604,17 +546,13 @@ export default function AdminProductsPage() {
     for (const chunk of chunkArray(ids, BULK_DELETE_CHUNK_SIZE)) {
       const results = await Promise.allSettled(chunk.map((id) => deleteProduct(id)));
 
-      const succeededIds = new Set(
-        chunk.filter((id, i) => results[i].status === "fulfilled")
-      );
+      const succeededIds = new Set(chunk.filter((id, i) => results[i].status === "fulfilled"));
       results.forEach((res, i) => {
         if (res.status === "rejected") {
           failures.push({ id: chunk[i], name: idToName.get(chunk[i]) ?? chunk[i] });
         }
       });
 
-      // Reflect progress as it happens — the grid visibly shrinks chunk by
-      // chunk instead of jumping all at once when the whole operation ends.
       if (succeededIds.size > 0) {
         setProducts((prev) => prev.filter((p) => !succeededIds.has(p.id)));
       }
@@ -646,6 +584,9 @@ export default function AdminProductsPage() {
     );
   }
 
+  const weightNum = parseFloat(form.weight) || 0;
+  const shippingEstimate = estimateProductShipping(weightNum);
+
   return (
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -654,6 +595,12 @@ export default function AdminProductsPage() {
           <p className="mt-1 font-body text-sm text-muted">{products.length} total products</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/admin/products/bulk-edit"
+            className="flex items-center justify-center gap-2 rounded-full border border-white/10 px-4 py-2.5 font-body text-sm font-semibold text-muted hover:text-ink"
+          >
+            <LayoutGrid size={16} /> Bulk Edit
+          </Link>
           <button
             type="button"
             onClick={toggleSelectMode}
@@ -760,7 +707,6 @@ export default function AdminProductsPage() {
         </div>
       )}
 
-      {/* Card grid — image-forward, readable at a glance, same layout logic on mobile and desktop (just fewer columns) */}
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
         {filtered.map((p) => {
           const cat = categories.find((c) => c.slug === p.categorySlug);
@@ -812,7 +758,6 @@ export default function AdminProductsPage() {
                   </span>
                 )}
 
-                {/* Right slot: quick edit/delete normally, a select checkbox while selecting */}
                 {selectMode ? (
                   <div className="absolute right-2 top-2">
                     <div
@@ -876,9 +821,6 @@ export default function AdminProductsPage() {
         )}
       </div>
 
-      {/* Floating bulk-action bar — appears once at least one product is
-          selected, and switches into a progress view while the chunked
-          delete is running. */}
       {selectedIds.size > 0 && (
         <div className="fixed inset-x-0 bottom-4 z-[90] flex justify-center px-4">
           <motion.div
@@ -1031,13 +973,32 @@ export default function AdminProductsPage() {
                     </div>
                   </div>
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-1.5 block font-body text-xs text-muted">Weight (kg)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min={0.01}
+                        value={form.weight}
+                        onChange={(e) => setForm({ ...form, weight: e.target.value })}
+                        className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink focus:outline-none focus:border-accent/50"
+                      />
+                      <p className="mt-1 font-body text-[11px] text-muted">Used to estimate domestic shipping cost.</p>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block font-body text-xs text-muted">Estimated shipping</label>
+                      <div className="rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-xs text-ink">
+                        Punjab ₹{shippingEstimate.punjab} · Rest of India ₹{shippingEstimate.india}
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
                       <p className="font-body text-xs text-muted">Product images</p>
                       {(form.image || form.hoverImage || form.thirdImage) && (
-                        <p className="font-mono text-[9px] text-muted">
-                          {selectedImageSlot ? "Tap another slot to swap" : "Tap or drag to rearrange"}
-                        </p>
+                        <p className="font-mono text-[9px] text-muted">Click to preview · drag to rearrange</p>
                       )}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
@@ -1049,6 +1010,7 @@ export default function AdminProductsPage() {
                         uploading={uploadingSlot === "image"}
                         onUpload={(f) => handleSlotUpload("image", f)}
                         onClear={() => setForm((f) => ({ ...f, image: "" }))}
+                        onView={() => form.image && setLightboxSrc(form.image)}
                         {...imageSlotProps("image")}
                       />
                       <ImageSlot
@@ -1058,6 +1020,7 @@ export default function AdminProductsPage() {
                         uploading={uploadingSlot === "hoverImage"}
                         onUpload={(f) => handleSlotUpload("hoverImage", f)}
                         onClear={() => setForm((f) => ({ ...f, hoverImage: "" }))}
+                        onView={() => form.hoverImage && setLightboxSrc(form.hoverImage)}
                         {...imageSlotProps("hoverImage")}
                       />
                       <ImageSlot
@@ -1067,6 +1030,7 @@ export default function AdminProductsPage() {
                         uploading={uploadingSlot === "thirdImage"}
                         onUpload={(f) => handleSlotUpload("thirdImage", f)}
                         onClear={() => setForm((f) => ({ ...f, thirdImage: "" }))}
+                        onView={() => form.thirdImage && setLightboxSrc(form.thirdImage)}
                         {...imageSlotProps("thirdImage")}
                       />
                     </div>
@@ -1201,6 +1165,8 @@ export default function AdminProductsPage() {
           </motion.div>
         </div>
       )}
+
+      {lightboxSrc && <ImageLightbox src={lightboxSrc} alt="Product image" onClose={() => setLightboxSrc(null)} />}
     </div>
   );
 }

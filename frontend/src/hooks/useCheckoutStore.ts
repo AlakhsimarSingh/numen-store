@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { CartItem } from "@/src/types";
+import { ShippingZone } from "@/src/lib/shipping";
 
 export interface ShippingInfo {
   fullName: string;
@@ -27,7 +28,7 @@ export interface ReturnRequest {
 }
 
 export interface OrderSnapshot {
-id: string;
+  id: string;
   items: CartItem[];
   subtotal: number;
   discount: number;
@@ -44,16 +45,38 @@ id: string;
   returnRequest?: ReturnRequest;
 }
 
+// The real, locked-in totals computed on the Payment page — weight- and
+// destination-aware shipping, the payment-method-specific COD fee, and
+// whatever promo discount was valid at that moment. Review reads this
+// rather than recomputing, so the number the shopper confirms and pays is
+// exactly what gets billed and recorded — it can't silently drift if
+// settings/rates change between the Payment and Review steps.
+export interface ConfirmedTotals {
+  subtotal: number;
+  discount: number;
+  shippingFee: number;
+  shippingZone: ShippingZone | null;
+  tax: number;
+  codFee: number;
+  total: number;
+  totalWeightKg: number;
+  destinationPincode: string | null;
+}
+
 interface CheckoutState {
   shipping: ShippingInfo | null;
   paymentMethod: PaymentMethodId | null;
   promoCode: string;
   discountPercent: number;
+  promoRevalidating: boolean;
+  confirmedTotals: ConfirmedTotals | null;
   lastOrder: OrderSnapshot | null;
   orders: OrderSnapshot[];
   setShipping: (s: ShippingInfo) => void;
   setPaymentMethod: (m: PaymentMethodId) => void;
   applyPromo: (code: string) => Promise<boolean>;
+  revalidatePromo: () => Promise<void>;
+  setConfirmedTotals: (totals: ConfirmedTotals) => void;
   placeOrder: (order: OrderSnapshot) => void;
   resetCheckout: () => void;
   updateOrderStatus: (orderId: string, status: OrderStatus) => void;
@@ -63,11 +86,13 @@ interface CheckoutState {
 
 export const useCheckoutStore = create<CheckoutState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       shipping: null,
       paymentMethod: null,
       promoCode: "",
       discountPercent: 0,
+      promoRevalidating: false,
+      confirmedTotals: null,
       lastOrder: null,
       orders: [],
       setShipping: (shipping) => set({ shipping }),
@@ -89,8 +114,46 @@ export const useCheckoutStore = create<CheckoutState>()(
           return false;
         }
       },
+      // Re-checks whatever promo code is currently stored against the
+      // server every time it's called. Covers back-button navigation into
+      // the cart, a fresh visit days later, or arriving after adding an
+      // item elsewhere — a code that was valid when first applied but has
+      // since expired, been deactivated, or hit its usage cap gets cleared
+      // here instead of silently continuing to apply a stale discount.
+      revalidatePromo: async () => {
+        const code = get().promoCode;
+        if (!code) return;
+        set({ promoRevalidating: true });
+        try {
+          const res = await fetch("/api/promo-codes/validate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.valid) {
+            set({ promoCode: "", discountPercent: 0 });
+          } else {
+            set({ promoCode: data.code, discountPercent: data.percent });
+          }
+        } catch {
+          // Network hiccup — don't punish the customer for a transient
+          // failure by clearing a promo that might still be valid; it'll
+          // simply be re-checked on the next visit.
+        } finally {
+          set({ promoRevalidating: false });
+        }
+      },
+      setConfirmedTotals: (confirmedTotals) => set({ confirmedTotals }),
       placeOrder: (order) => set((state) => ({ lastOrder: order, orders: [order, ...state.orders] })),
-      resetCheckout: () => set({ shipping: null, paymentMethod: null, promoCode: "", discountPercent: 0 }),
+      resetCheckout: () =>
+        set({
+          shipping: null,
+          paymentMethod: null,
+          promoCode: "",
+          discountPercent: 0,
+          confirmedTotals: null,
+        }),
       updateOrderStatus: (orderId, status) =>
         set((state) => ({ orders: state.orders.map((o) => (o.id === orderId ? { ...o, status } : o)) })),
       requestReturn: (orderId, reason, comment) =>

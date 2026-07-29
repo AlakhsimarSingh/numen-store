@@ -2,9 +2,9 @@
 import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Minus, Plus, ShoppingBag, Tag, Trash2 } from "lucide-react";
+import { Minus, Plus, ShoppingBag, Tag, Trash2, Truck } from "lucide-react";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
@@ -23,6 +23,9 @@ export default function CartPage() {
   const promoCode = useCheckoutStore((s) => s.promoCode);
   const discountPercent = useCheckoutStore((s) => s.discountPercent);
   const applyPromo = useCheckoutStore((s) => s.applyPromo);
+  const revalidatePromo = useCheckoutStore((s) => s.revalidatePromo);
+  const promoRevalidating = useCheckoutStore((s) => s.promoRevalidating);
+  const shipping = useCheckoutStore((s) => s.shipping);
 
   const currency = useCurrencyStore((s) => s.currency);
   const rates = useCurrencyStore((s) => s.rates);
@@ -32,6 +35,10 @@ export default function CartPage() {
   const [promoInput, setPromoInput] = useState(promoCode);
   const [promoError, setPromoError] = useState("");
   const [promoApplying, setPromoApplying] = useState(false);
+
+  // Optional pincode for an accurate shipping estimate before checkout —
+  // prefilled from a previously-saved shipping address if one exists.
+  const [pincode, setPincode] = useState(shipping?.zip ?? "");
 
   const showToast = useToastStore((s) => s.show);
   const shippingSettings = useSiteSettingsStore(
@@ -43,9 +50,14 @@ export default function CartPage() {
     }))
   );
 
-  // Each line's display price honors that product's regional override if
-  // one exists, falling back to rate conversion — same logic as the
-  // product page, applied per item rather than to a single aggregate.
+  // Re-validate whatever promo is currently stored every single time the
+  // cart is visited — covers back-button navigation, a fresh visit, or
+  // arriving here after adding an item elsewhere. A stale/deactivated code
+  // gets cleared automatically instead of silently continuing to apply.
+  useEffect(() => {
+    revalidatePromo();
+  }, [revalidatePromo]);
+
   const lineDisplays = items.map((item) => ({
     item,
     display: getDisplayPrice(item, currency, rates),
@@ -53,13 +65,18 @@ export default function CartPage() {
   const subtotal = lineDisplays.reduce((sum, { item, display }) => sum + display.price * item.qty, 0);
   const anyEstimated = lineDisplays.some(({ display }) => display.estimated);
 
-  const { discount, shippingFee, tax, total } = computeTotals({
+  const totalWeightKg = items.reduce((sum, i) => sum + (i.weight ?? 0.3) * i.qty, 0);
+  const effectivePincode = pincode.trim() || shipping?.zip || null;
+
+  const { discount, shippingFee, tax, total, shippingZone } = computeTotals({
     subtotal,
     discountPercent,
     paymentMethod: null,
     settings: shippingSettings,
     currency,
     rates,
+    totalWeightKg,
+    destinationPincode: effectivePincode,
   });
 
   async function handleApplyPromo() {
@@ -181,8 +198,32 @@ export default function CartPage() {
           </div>
           {promoError && <p className="mt-1.5 font-mono text-[11px] text-accent2">{promoError}</p>}
           {discountPercent > 0 && !promoError && (
-            <p className="mt-1.5 font-mono text-[11px] text-accent">{discountPercent}% off applied</p>
+            <p className="mt-1.5 font-mono text-[11px] text-accent">
+              {promoRevalidating ? "Checking promo…" : `${discountPercent}% off applied`}
+            </p>
           )}
+
+          {/* Shipping estimate — pincode is optional here; without it we
+              default to the standard India rate as a conservative estimate.
+              The real rate is locked in once the shipping address step
+              collects a confirmed pincode. */}
+          <div className="mt-4 rounded-xl border border-white/10 bg-bg p-3">
+            <div className="flex items-center gap-2 font-body text-xs text-muted">
+              <Truck size={13} /> Estimate shipping
+            </div>
+            <input
+              value={pincode}
+              onChange={(e) => setPincode(e.target.value)}
+              placeholder="Enter pincode for exact cost"
+              maxLength={6}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+            />
+            {shippingZone && (
+              <p className="mt-1.5 font-mono text-[10px] text-muted">
+                {shippingZone === "punjab" ? "Shipping within Punjab" : "Shipping within India"}
+              </p>
+            )}
+          </div>
 
           <div className="mt-5 space-y-2 border-t border-white/5 pt-4 font-body text-sm">
             <div className="flex justify-between text-muted">
@@ -199,7 +240,7 @@ export default function CartPage() {
               </div>
             )}
             <div className="flex justify-between text-muted">
-              <span>Shipping</span>
+              <span>Shipping{!effectivePincode && shippingFee > 0 ? " (est.)" : ""}</span>
               <span className="text-ink">{shippingFee === 0 ? "Free" : formatMoney(shippingFee, currency, symbol)}</span>
             </div>
             <div className="flex justify-between text-muted">

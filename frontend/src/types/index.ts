@@ -1,12 +1,11 @@
 import { LucideIcon } from "lucide-react";
 
-export type CurrencyCode = string; // was: "USD" | "INR" | "EUR" | "GBP" — now open, admin can add any ISO code
+export type CurrencyCode = string;
 
 export interface RegionalPrice {
   price: number;
   compareAtPrice?: number;
 }
-
 
 export interface Category {
   slug: string;
@@ -32,12 +31,13 @@ export interface Product {
   name: string;
   slug: string;
   categorySlug: string;
-  price: number; // canonical USD base price
+  price: number;
   compareAtPrice?: number;
   image: string;
   images: string[];
   video?: string;
   stock: number;
+  weight: number; // kg — used to estimate domestic shipping cost
   isNew: boolean;
   isSpotlight: boolean;
   rating: number;
@@ -55,6 +55,7 @@ export interface CartItem {
   compareAtPrice?: number;
   regionalPrices?: Partial<Record<CurrencyCode, RegionalPrice>>;
   image: string;
+  weight: number; // kg, captured from the product at add-to-cart time
   qty: number;
   color?: string;
   size?: string;
