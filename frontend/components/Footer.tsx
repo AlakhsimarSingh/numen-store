@@ -299,6 +299,7 @@ export default function Footer() {
           <div className="flex gap-6">
             <a href="/privacy" className="font-mono text-xs text-muted hover:text-ink">Privacy</a>
             <a href="/terms" className="font-mono text-xs text-muted hover:text-ink">Terms</a>
+            <a href="/refund-policy" className="font-mono text-xs text-muted hover:text-ink">Refund Policy</a>
           </div>
         </div>
       </div>

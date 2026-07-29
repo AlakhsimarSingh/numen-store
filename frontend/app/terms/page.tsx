@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function TermsPage() {
   return (
     <div className="mx-auto max-w-3xl px-6 py-16">
@@ -10,8 +12,10 @@ export default function TermsPage() {
           <h2 className="mb-2 font-display text-lg font-semibold text-ink">1. Orders & payment</h2>
           <p>
             By placing an order, you confirm the shipping and payment details provided are accurate. Prices are
-            listed in USD unless otherwise noted and are subject to change without notice prior to purchase
-            confirmation.
+            listed in Indian Rupees (₹) unless a regional price has been set for your currency, and are subject to
+            change without notice prior to purchase confirmation. We accept payment by card, UPI, and Cash on
+            Delivery where available; card and UPI payments are processed securely through our payment partner,
+            Razorpay.
           </p>
         </section>
         <section>
@@ -22,11 +26,12 @@ export default function TermsPage() {
           </p>
         </section>
         <section>
-          <h2 className="mb-2 font-display text-lg font-semibold text-ink">3. Returns & exchanges</h2>
+          <h2 className="mb-2 font-display text-lg font-semibold text-ink">3. Returns & refunds</h2>
           <p>
-            Items may be returned or exchanged within 30 days of delivery, provided they are unworn and have original
-            tags attached. Refunds are issued to the original payment method once the return is received and
-            inspected.
+            All sales are final. We do not offer cancellations, returns, or refunds once an order has been placed
+            and confirmed. See our{" "}
+            <Link href="/refund-policy" className="text-accent hover:underline">Refund Policy</Link>{" "}
+            for full details.
           </p>
         </section>
         <section>
@@ -41,6 +46,14 @@ export default function TermsPage() {
           <p>
             We may update these terms occasionally. Continued use of the site after changes constitutes acceptance
             of the updated terms.
+          </p>
+        </section>
+        <section>
+          <h2 className="mb-2 font-display text-lg font-semibold text-ink">6. Contact</h2>
+          <p>
+            Questions about these terms? Reach us at{" "}
+            <a href="mailto:nmnnumen@gmail.com" className="text-accent hover:underline">nmnnumen@gmail.com</a> or
+            call <a href="tel:+917009612811" className="text-accent hover:underline">+91 700 961 2811</a>.
           </p>
         </section>
       </div>
