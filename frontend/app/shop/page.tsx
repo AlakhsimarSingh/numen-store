@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { fetchProductsServer, fetchCategoriesServer } from "@/src/lib/serverApi";
 import ShopGrid from "@/components/shop/ShopGrid";
+import { SITE_URL } from "@/src/lib/seo";
 
 // Was `force-dynamic`, which re-fetches and re-renders on literally every
 // request with no caching at all — with 440+ products that's a lot of
@@ -10,9 +11,25 @@ import ShopGrid from "@/components/shop/ShopGrid";
 // most once every 5 minutes, which is plenty fresh for a catalog listing.
 export const revalidate = 300;
 
+const title = "Shop All — NUMEN.";
+const description = "Browse the full NUMEN catalog — premium fits across every category, new drops weekly.";
+
 export const metadata: Metadata = {
-  title: "Shop All — NUMEN.",
-  description: "Browse the full NUMEN catalog — premium fits across every category, new drops weekly.",
+  title,
+  description,
+  alternates: { canonical: `${SITE_URL}/shop` },
+  openGraph: {
+    title,
+    description,
+    url: `${SITE_URL}/shop`,
+    siteName: "NUMEN.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description,
+  },
 };
 
 export default async function ShopPage() {

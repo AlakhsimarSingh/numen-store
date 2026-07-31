@@ -1,0 +1,17 @@
+# NUMEN
+
+> NUMEN is an online apparel and streetwear marketplace offering premium fits across apparel, shoes, accessories, bags, and watches, with new drops weekly.
+
+## Key pages
+- [All Products](https://numen.store/shop): Full product catalog with filters for category, size, and price
+- [Search](https://numen.store/search): Search products by name, category, color, or size
+
+## Policies
+- [Privacy Policy](https://numen.store/privacy)
+- [Terms of Service](https://numen.store/terms)
+- [Refund Policy](https://numen.store/refund-policy): All sales are final — no cancellations, returns, or refunds
+
+## Notes
+- Prices are listed in Indian Rupees (₹) by default, with automatic conversion shown for other currencies.
+- Payment methods accepted: card, UPI, and Cash on Delivery (COD) where available.
+- Ships within India.
