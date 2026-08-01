@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { ChevronRight, Minus, Plus, ShieldCheck, Truck } from "lucide-react";
 import { Product } from "@/src/types";
 import { cn } from "@/src/lib/utils";
@@ -32,6 +38,11 @@ const wipeTransition = { duration: 0.55, ease: wipeEase };
 // How long the glitch overlay (RGB split + slice tear + scanlines) plays
 // at the start of each image transition, in ms.
 const GLITCH_DURATION_MS = 420;
+
+// Diameter of the magnifier lens (px) and how much it zooms into the
+// image (as a background-size percentage — 300% = 3x).
+const LENS_SIZE = 190;
+const LENS_ZOOM = 300;
 
 export default function ProductDetail({
   product,
@@ -155,6 +166,63 @@ export default function ProductDetail({
     return () => clearTimeout(timer);
   }, [activeMedia, gallery, autoplayPaused]);
 
+  // ---------- Magnifier zoom (desktop, mouse-driven) ----------
+
+  const [zoomed, setZoomed] = useState(false);
+  const [pointerFine, setPointerFine] = useState(false);
+  const imageWrapRef = useRef<HTMLDivElement>(null);
+
+  // Lens position (px, relative to the image container) — spring-smoothed
+  // via MotionValues so the lens glides after the cursor instead of
+  // snapping frame-to-frame, without triggering React re-renders on every
+  // mousemove.
+  const lensX = useMotionValue(0);
+  const lensY = useMotionValue(0);
+  const lensSpringX = useSpring(lensX, { stiffness: 500, damping: 45, mass: 0.5 });
+  const lensSpringY = useSpring(lensY, { stiffness: 500, damping: 45, mass: 0.5 });
+
+  // Where inside the source image the lens should "look" (0–100%), also
+  // spring-smoothed, driving the magnified background-position.
+  const bgPosX = useMotionValue(50);
+  const bgPosY = useMotionValue(50);
+  const bgSpringX = useSpring(bgPosX, { stiffness: 400, damping: 40 });
+  const bgSpringY = useSpring(bgPosY, { stiffness: 400, damping: 40 });
+  const bgPosXPct = useTransform(bgSpringX, (v) => `${v}%`);
+  const bgPosYPct = useTransform(bgSpringY, (v) => `${v}%`);
+
+  // Only enable click-to-zoom on mouse/trackpad devices — it's a hover-
+  // driven interaction that doesn't translate to touch.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(pointer: fine)");
+    setPointerFine(mq.matches);
+    const handler = (ev: MediaQueryListEvent) => setPointerFine(ev.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  // Exit zoom whenever the displayed image changes, so the lens never
+  // shows a stale crop over a new picture.
+  useEffect(() => setZoomed(false), [activeMedia]);
+
+  function handleImageMouseMove(e: ReactMouseEvent<HTMLDivElement>) {
+    const rect = imageWrapRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const relX = e.clientX - rect.left;
+    const relY = e.clientY - rect.top;
+    lensX.set(relX);
+    lensY.set(relY);
+    bgPosX.set(Math.min(100, Math.max(0, (relX / rect.width) * 100)));
+    bgPosY.set(Math.min(100, Math.max(0, (relY / rect.height) * 100)));
+  }
+
+  function handleImageClick() {
+    if (!pointerFine || gallery[activeMedia]?.type === "video") return;
+    setZoomed((z) => !z);
+  }
+
+  const canZoomHere = pointerFine && gallery[activeMedia]?.type !== "video";
+
   // Both axes need the same fallback the admin's VariantsEditor.rebuildMatrix
   // uses when storing data: a product with no real colors is keyed under
   // "Default", a product with no real sizes is keyed under "One Size". Also
@@ -203,228 +271,322 @@ export default function ProductDetail({
 
       <div className="grid grid-cols-1 gap-10 lg:grid-cols-2">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease }}>
-          <div
-            className="relative aspect-[3/4] overflow-hidden rounded-3xl bg-surface2"
-            onMouseEnter={() => setAutoplayPaused(true)}
-            onMouseLeave={() => setAutoplayPaused(false)}
-          >
-            {/* Hidden SVG filters that isolate the red and cyan channels of
-                the duplicated image layers below, used for the RGB-split
-                glitch effect. Zero-size so they render nothing themselves. */}
-            <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
-              <defs>
-                <filter id="glitchRedChannel">
-                  <feColorMatrix
-                    type="matrix"
-                    values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"
-                  />
-                </filter>
-                <filter id="glitchCyanChannel">
-                  <feColorMatrix
-                    type="matrix"
-                    values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"
-                  />
-                </filter>
-              </defs>
-            </svg>
-
-            <AnimatePresence initial={false}>
-              {gallery[activeMedia]?.type === "video" ? (
-                <motion.video
-                  key={gallery[activeMedia].src}
-                  initial={{ clipPath: dir >= 0 ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)" }}
-                  animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
-                  exit={{
-                    clipPath: dir >= 0 ? "inset(0% 100% 0% 0%)" : "inset(0% 0% 0% 100%)",
-                    transition: { duration: 0.35, ease: wipeEase },
-                  }}
-                  transition={wipeTransition}
-                  src={gallery[activeMedia].src}
-                  controls
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              ) : (
-                <motion.div
-                  key={gallery[activeMedia]?.src ?? "fallback"}
-                  initial={{ clipPath: dir >= 0 ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)" }}
-                  animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
-                  exit={{
-                    clipPath: dir >= 0 ? "inset(0% 100% 0% 0%)" : "inset(0% 0% 0% 100%)",
-                    transition: { duration: 0.35, ease: wipeEase },
-                  }}
-                  transition={wipeTransition}
-                  className="absolute inset-0 overflow-hidden"
-                >
-                  <Image
-                    src={gallery[activeMedia]?.src ?? product.image}
-                    alt={product.name}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 50vw"
-                    className="object-cover"
-                    priority
-                  />
-
-                  {glitching && gallery[activeMedia]?.src && (
-                    <div className="glitch-overlay" aria-hidden>
-                      {/* RGB channel split — two duplicate images, each showing
-                          only one color channel, jittering in opposite
-                          directions and fading out as the glitch settles. */}
-                      <img
-                        src={gallery[activeMedia].src}
-                        alt=""
-                        className="glitch-channel glitch-channel-red"
-                      />
-                      <img
-                        src={gallery[activeMedia].src}
-                        alt=""
-                        className="glitch-channel glitch-channel-cyan"
-                      />
-
-                      {/* Slice tear — thin horizontal bands of the same image
-                          punched out and jumped sideways, like a signal drop. */}
-                      <div className="glitch-slice glitch-slice-0" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
-                      <div className="glitch-slice glitch-slice-1" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
-                      <div className="glitch-slice glitch-slice-2" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
-                      <div className="glitch-slice glitch-slice-3" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
-
-                      {/* Scanline flicker for a CRT/signal-noise finish. */}
-                      <div className="glitch-scanlines" />
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <style jsx>{`
-              .glitch-overlay {
-                position: absolute;
-                inset: 0;
-                pointer-events: none;
-              }
-              .glitch-channel {
-                position: absolute;
-                inset: 0;
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                mix-blend-mode: screen;
-                opacity: 0.75;
-                will-change: transform, opacity;
-              }
-              .glitch-channel-red {
-                filter: url(#glitchRedChannel);
-                animation: glitchShiftRed ${GLITCH_DURATION_MS}ms steps(7, end) forwards;
-              }
-              .glitch-channel-cyan {
-                filter: url(#glitchCyanChannel);
-                animation: glitchShiftCyan ${GLITCH_DURATION_MS}ms steps(7, end) forwards;
-              }
-              @keyframes glitchShiftRed {
-                0% { transform: translate3d(0, 0, 0); opacity: 0.85; }
-                14% { transform: translate3d(-9px, 2px, 0); }
-                28% { transform: translate3d(6px, -3px, 0); }
-                42% { transform: translate3d(-5px, 1px, 0); }
-                56% { transform: translate3d(3px, 2px, 0); }
-                70% { transform: translate3d(-2px, 0, 0); }
-                100% { transform: translate3d(0, 0, 0); opacity: 0; }
-              }
-              @keyframes glitchShiftCyan {
-                0% { transform: translate3d(0, 0, 0); opacity: 0.85; }
-                14% { transform: translate3d(9px, -2px, 0); }
-                28% { transform: translate3d(-6px, 3px, 0); }
-                42% { transform: translate3d(5px, -1px, 0); }
-                56% { transform: translate3d(-3px, -2px, 0); }
-                70% { transform: translate3d(2px, 0, 0); }
-                100% { transform: translate3d(0, 0, 0); opacity: 0; }
-              }
-
-              .glitch-slice {
-                position: absolute;
-                left: 0;
-                right: 0;
-                background-size: cover;
-                background-position: center;
-                opacity: 0.9;
-                will-change: transform, opacity;
-              }
-              .glitch-slice-0 { top: 8%;  height: 7%;  animation: sliceTear0 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
-              .glitch-slice-1 { top: 27%; height: 5%;  animation: sliceTear1 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
-              .glitch-slice-2 { top: 49%; height: 9%;  animation: sliceTear2 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
-              .glitch-slice-3 { top: 68%; height: 6%;  animation: sliceTear3 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
-              @keyframes sliceTear0 {
-                0% { transform: translateX(0); opacity: 0.9; }
-                20% { transform: translateX(18px); }
-                45% { transform: translateX(-12px); }
-                70% { transform: translateX(6px); }
-                100% { transform: translateX(0); opacity: 0; }
-              }
-              @keyframes sliceTear1 {
-                0% { transform: translateX(0); opacity: 0.9; }
-                20% { transform: translateX(-22px); }
-                45% { transform: translateX(10px); }
-                70% { transform: translateX(-5px); }
-                100% { transform: translateX(0); opacity: 0; }
-              }
-              @keyframes sliceTear2 {
-                0% { transform: translateX(0); opacity: 0.9; }
-                20% { transform: translateX(14px); }
-                45% { transform: translateX(-18px); }
-                70% { transform: translateX(4px); }
-                100% { transform: translateX(0); opacity: 0; }
-              }
-              @keyframes sliceTear3 {
-                0% { transform: translateX(0); opacity: 0.9; }
-                20% { transform: translateX(-16px); }
-                45% { transform: translateX(9px); }
-                70% { transform: translateX(-4px); }
-                100% { transform: translateX(0); opacity: 0; }
-              }
-
-              .glitch-scanlines {
-                position: absolute;
-                inset: 0;
-                background: repeating-linear-gradient(
-                  to bottom,
-                  rgba(255, 255, 255, 0.08) 0px,
-                  rgba(255, 255, 255, 0.08) 1px,
-                  transparent 1px,
-                  transparent 3px
-                );
-                mix-blend-mode: overlay;
-                animation: scanlineFlicker ${GLITCH_DURATION_MS}ms steps(5, end) forwards;
-              }
-              @keyframes scanlineFlicker {
-                0% { opacity: 0; }
-                15% { opacity: 0.55; }
-                35% { opacity: 0.15; }
-                55% { opacity: 0.45; }
-                80% { opacity: 0.1; }
-                100% { opacity: 0; }
-              }
-            `}</style>
-
-            {product.isNew && (
-              <span className="absolute left-4 top-4 z-10 rounded-full bg-accent px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-bg">New</span>
-            )}
-            {product.compareAtPrice && (
-              <span className="absolute right-4 top-4 z-10 rounded-full bg-accent2 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-ink">Sale</span>
-            )}
-
+          <div className="flex flex-col gap-3 lg:flex-row lg:gap-4">
+            {/* Thumbnail rail — horizontal strip below the hero on mobile,
+                vertical column to its left on desktop. Same markup, just
+                reordered/reflowed via `order` + flex-direction. */}
             {gallery.length > 1 && (
-              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
-                {gallery.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => goToMedia(i)}
-                    aria-label={`Go to image ${i + 1}`}
-                    className={cn(
-                      "h-1.5 rounded-full bg-bg/60 backdrop-blur-sm transition-all",
-                      i === activeMedia ? "w-6 bg-accent" : "w-1.5 hover:bg-bg/90"
-                    )}
-                  />
-                ))}
+              <div className="order-2 flex gap-2.5 overflow-x-auto pb-1 lg:order-1 lg:w-20 lg:shrink-0 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
+                {gallery.map((item, i) => {
+                  const isActive = i === activeMedia;
+                  return (
+                    <button
+                      key={`${item.type}-${item.src}-${i}`}
+                      type="button"
+                      onClick={() => goToMedia(i)}
+                      aria-label={item.type === "video" ? "Play product video" : `View image ${i + 1}`}
+                      aria-current={isActive}
+                      className="group relative aspect-square w-16 shrink-0 overflow-hidden rounded-2xl bg-surface2 lg:w-full"
+                    >
+                      {item.type === "video" ? (
+                        <video src={item.src} muted playsInline className="h-full w-full object-cover" />
+                      ) : (
+                        <Image
+                          src={item.src}
+                          alt=""
+                          fill
+                          sizes="80px"
+                          quality={75}
+                          loading={i === 0 ? "eager" : "lazy"}
+                          className={cn(
+                            "object-cover transition-opacity duration-200",
+                            isActive ? "opacity-100" : "opacity-70 group-hover:opacity-100"
+                          )}
+                        />
+                      )}
+                      {/* Shared-layout highlight — physically slides/resizes
+                          between thumbnails on a spring rather than fading,
+                          so switching images reads as one continuous motion. */}
+                      {isActive && (
+                        <motion.span
+                          layoutId="activeThumbHighlight"
+                          transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                          className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-accent shadow-[0_0_0_3px_rgba(0,0,0,0.15)]"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
+
+            <div
+              ref={imageWrapRef}
+              className={cn(
+                "relative order-1 aspect-[3/4] flex-1 overflow-hidden rounded-3xl bg-surface2 lg:order-2",
+                canZoomHere && (zoomed ? "cursor-zoom-out" : "cursor-zoom-in")
+              )}
+              onMouseEnter={() => setAutoplayPaused(true)}
+              onMouseLeave={() => {
+                setAutoplayPaused(false);
+                setZoomed(false);
+              }}
+              onMouseMove={handleImageMouseMove}
+              onClick={handleImageClick}
+            >
+              {/* Hidden SVG filters that isolate the red and cyan channels of
+                  the duplicated image layers below, used for the RGB-split
+                  glitch effect. Zero-size so they render nothing themselves. */}
+              <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
+                <defs>
+                  <filter id="glitchRedChannel">
+                    <feColorMatrix
+                      type="matrix"
+                      values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"
+                    />
+                  </filter>
+                  <filter id="glitchCyanChannel">
+                    <feColorMatrix
+                      type="matrix"
+                      values="0 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0"
+                    />
+                  </filter>
+                </defs>
+              </svg>
+
+              <AnimatePresence initial={false}>
+                {gallery[activeMedia]?.type === "video" ? (
+                  <motion.video
+                    key={gallery[activeMedia].src}
+                    initial={{ clipPath: dir >= 0 ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)" }}
+                    animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
+                    exit={{
+                      clipPath: dir >= 0 ? "inset(0% 100% 0% 0%)" : "inset(0% 0% 0% 100%)",
+                      transition: { duration: 0.35, ease: wipeEase },
+                    }}
+                    transition={wipeTransition}
+                    src={gallery[activeMedia].src}
+                    controls
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                ) : (
+                  <motion.div
+                    key={gallery[activeMedia]?.src ?? "fallback"}
+                    initial={{ clipPath: dir >= 0 ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)" }}
+                    animate={{ clipPath: "inset(0% 0% 0% 0%)" }}
+                    exit={{
+                      clipPath: dir >= 0 ? "inset(0% 100% 0% 0%)" : "inset(0% 0% 0% 100%)",
+                      transition: { duration: 0.35, ease: wipeEase },
+                    }}
+                    transition={wipeTransition}
+                    className="absolute inset-0 overflow-hidden"
+                  >
+                    <Image
+                      src={gallery[activeMedia]?.src ?? product.image}
+                      alt={product.name}
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      quality={95}
+                      className="object-cover"
+                      {...(activeMedia === 0 ? { priority: true } : { loading: "eager" as const })}
+                    />
+
+                    {glitching && gallery[activeMedia]?.src && (
+                      <div className="glitch-overlay" aria-hidden>
+                        {/* RGB channel split — two duplicate images, each showing
+                            only one color channel, jittering in opposite
+                            directions and fading out as the glitch settles. */}
+                        <img
+                          src={gallery[activeMedia].src}
+                          alt=""
+                          className="glitch-channel glitch-channel-red"
+                        />
+                        <img
+                          src={gallery[activeMedia].src}
+                          alt=""
+                          className="glitch-channel glitch-channel-cyan"
+                        />
+
+                        {/* Slice tear — thin horizontal bands of the same image
+                            punched out and jumped sideways, like a signal drop. */}
+                        <div className="glitch-slice glitch-slice-0" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
+                        <div className="glitch-slice glitch-slice-1" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
+                        <div className="glitch-slice glitch-slice-2" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
+                        <div className="glitch-slice glitch-slice-3" style={{ backgroundImage: `url(${gallery[activeMedia].src})` }} />
+
+                        {/* Scanline flicker for a CRT/signal-noise finish. */}
+                        <div className="glitch-scanlines" />
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Magnifier lens — click toggles zoom (cursor swaps to the
+                  native zoom-in/zoom-out glass), then this circular lens
+                  tracks the cursor and shows a magnified crop of the full-
+                  resolution source image. Spring-smoothed via MotionValues
+                  so it glides rather than jumps, and updates without
+                  triggering React re-renders on every mousemove. */}
+              <AnimatePresence>
+                {zoomed && canZoomHere && gallery[activeMedia]?.src && (
+                  <motion.div
+                    key="zoom-lens"
+                    aria-hidden
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.5 }}
+                    transition={{ type: "spring", stiffness: 340, damping: 28 }}
+                    className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent/80 shadow-[0_8px_40px_-4px_rgba(0,0,0,0.55)] ring-4 ring-bg/40"
+                    style={{
+                      left: lensSpringX,
+                      top: lensSpringY,
+                      width: LENS_SIZE,
+                      height: LENS_SIZE,
+                      backgroundImage: `url(${gallery[activeMedia].src})`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundSize: `${LENS_ZOOM}% ${LENS_ZOOM}%`,
+                      backgroundPositionX: bgPosXPct,
+                      backgroundPositionY: bgPosYPct,
+                    }}
+                  />
+                )}
+              </AnimatePresence>
+
+              <style jsx>{`
+                .glitch-overlay {
+                  position: absolute;
+                  inset: 0;
+                  pointer-events: none;
+                }
+                .glitch-channel {
+                  position: absolute;
+                  inset: 0;
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                  mix-blend-mode: screen;
+                  opacity: 0.75;
+                  will-change: transform, opacity;
+                }
+                .glitch-channel-red {
+                  filter: url(#glitchRedChannel);
+                  animation: glitchShiftRed ${GLITCH_DURATION_MS}ms steps(7, end) forwards;
+                }
+                .glitch-channel-cyan {
+                  filter: url(#glitchCyanChannel);
+                  animation: glitchShiftCyan ${GLITCH_DURATION_MS}ms steps(7, end) forwards;
+                }
+                @keyframes glitchShiftRed {
+                  0% { transform: translate3d(0, 0, 0); opacity: 0.85; }
+                  14% { transform: translate3d(-9px, 2px, 0); }
+                  28% { transform: translate3d(6px, -3px, 0); }
+                  42% { transform: translate3d(-5px, 1px, 0); }
+                  56% { transform: translate3d(3px, 2px, 0); }
+                  70% { transform: translate3d(-2px, 0, 0); }
+                  100% { transform: translate3d(0, 0, 0); opacity: 0; }
+                }
+                @keyframes glitchShiftCyan {
+                  0% { transform: translate3d(0, 0, 0); opacity: 0.85; }
+                  14% { transform: translate3d(9px, -2px, 0); }
+                  28% { transform: translate3d(-6px, 3px, 0); }
+                  42% { transform: translate3d(5px, -1px, 0); }
+                  56% { transform: translate3d(-3px, -2px, 0); }
+                  70% { transform: translate3d(2px, 0, 0); }
+                  100% { transform: translate3d(0, 0, 0); opacity: 0; }
+                }
+
+                .glitch-slice {
+                  position: absolute;
+                  left: 0;
+                  right: 0;
+                  background-size: cover;
+                  background-position: center;
+                  opacity: 0.9;
+                  will-change: transform, opacity;
+                }
+                .glitch-slice-0 { top: 8%;  height: 7%;  animation: sliceTear0 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
+                .glitch-slice-1 { top: 27%; height: 5%;  animation: sliceTear1 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
+                .glitch-slice-2 { top: 49%; height: 9%;  animation: sliceTear2 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
+                .glitch-slice-3 { top: 68%; height: 6%;  animation: sliceTear3 ${GLITCH_DURATION_MS}ms steps(6, end) forwards; }
+                @keyframes sliceTear0 {
+                  0% { transform: translateX(0); opacity: 0.9; }
+                  20% { transform: translateX(18px); }
+                  45% { transform: translateX(-12px); }
+                  70% { transform: translateX(6px); }
+                  100% { transform: translateX(0); opacity: 0; }
+                }
+                @keyframes sliceTear1 {
+                  0% { transform: translateX(0); opacity: 0.9; }
+                  20% { transform: translateX(-22px); }
+                  45% { transform: translateX(10px); }
+                  70% { transform: translateX(-5px); }
+                  100% { transform: translateX(0); opacity: 0; }
+                }
+                @keyframes sliceTear2 {
+                  0% { transform: translateX(0); opacity: 0.9; }
+                  20% { transform: translateX(14px); }
+                  45% { transform: translateX(-18px); }
+                  70% { transform: translateX(4px); }
+                  100% { transform: translateX(0); opacity: 0; }
+                }
+                @keyframes sliceTear3 {
+                  0% { transform: translateX(0); opacity: 0.9; }
+                  20% { transform: translateX(-16px); }
+                  45% { transform: translateX(9px); }
+                  70% { transform: translateX(-4px); }
+                  100% { transform: translateX(0); opacity: 0; }
+                }
+
+                .glitch-scanlines {
+                  position: absolute;
+                  inset: 0;
+                  background: repeating-linear-gradient(
+                    to bottom,
+                    rgba(255, 255, 255, 0.08) 0px,
+                    rgba(255, 255, 255, 0.08) 1px,
+                    transparent 1px,
+                    transparent 3px
+                  );
+                  mix-blend-mode: overlay;
+                  animation: scanlineFlicker ${GLITCH_DURATION_MS}ms steps(5, end) forwards;
+                }
+                @keyframes scanlineFlicker {
+                  0% { opacity: 0; }
+                  15% { opacity: 0.55; }
+                  35% { opacity: 0.15; }
+                  55% { opacity: 0.45; }
+                  80% { opacity: 0.1; }
+                  100% { opacity: 0; }
+                }
+              `}</style>
+
+              {product.isNew && (
+                <span className="absolute left-4 top-4 z-10 rounded-full bg-accent px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-bg">New</span>
+              )}
+              {product.compareAtPrice && (
+                <span className="absolute right-4 top-4 z-10 rounded-full bg-accent2 px-3 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-ink">Sale</span>
+              )}
+
+              {gallery.length > 1 && (
+                <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                  {gallery.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goToMedia(i);
+                      }}
+                      aria-label={`Go to image ${i + 1}`}
+                      className={cn(
+                        "h-1.5 rounded-full bg-bg/60 backdrop-blur-sm transition-all",
+                        i === activeMedia ? "w-6 bg-accent" : "w-1.5 hover:bg-bg/90"
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
 
