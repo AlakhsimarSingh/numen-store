@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowUpRight, LogOut, User } from "lucide-react";
+import { ArrowUpRight, LogOut, User, X } from "lucide-react";
 import { useAuthStore } from "@/src/hooks/useAuthStore";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
 
@@ -40,6 +40,23 @@ export default function MobileNavOverlay({ open, onClose }: { open: boolean; onC
           transition={{ duration: 0.3, ease }}
           className="fixed inset-0 z-[90] flex flex-col bg-bg md:hidden"
         >
+          {/* Close button — lets a person get back to where they were
+              without relying on the browser back button or re-tapping the
+              (now-hidden) menu trigger behind this overlay. */}
+          <motion.button
+            type="button"
+            onClick={onClose}
+            aria-label="Close menu"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ delay: 0.05, duration: 0.3, ease }}
+            className="absolute right-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-ink active:bg-white/10"
+            style={{ top: "max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))" }}
+          >
+            <X size={20} />
+          </motion.button>
+
           <div className="flex flex-1 flex-col justify-center px-8">
             <nav className="flex flex-col">
               {links.map((link, i) => (
