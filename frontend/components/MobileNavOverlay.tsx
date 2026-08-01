@@ -40,24 +40,30 @@ export default function MobileNavOverlay({ open, onClose }: { open: boolean; onC
           transition={{ duration: 0.3, ease }}
           className="fixed inset-0 z-[90] flex flex-col bg-bg md:hidden"
         >
-          {/* Close button — lets a person get back to where they were
-              without relying on the browser back button or re-tapping the
-              (now-hidden) menu trigger behind this overlay. */}
-          <motion.button
-            type="button"
-            onClick={onClose}
-            aria-label="Close menu"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ delay: 0.05, duration: 0.3, ease }}
-            className="absolute right-6 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-ink active:bg-white/10"
-            style={{ top: "max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))" }}
+          {/* Close button lives in its own row (not absolutely positioned
+              over the content) — that way it takes up real space in the
+              flex layout and pushes the nav links down below it, so it can
+              never collide with them regardless of screen height or how
+              many links there are. */}
+          <div
+            className="flex shrink-0 justify-end px-6 pb-2"
+            style={{ paddingTop: "max(1.5rem, calc(env(safe-area-inset-top, 0px) + 1rem))" }}
           >
-            <X size={20} />
-          </motion.button>
+            <motion.button
+              type="button"
+              onClick={onClose}
+              aria-label="Close menu"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ delay: 0.05, duration: 0.3, ease }}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 text-ink active:bg-white/10"
+            >
+              <X size={20} />
+            </motion.button>
+          </div>
 
-          <div className="flex flex-1 flex-col justify-center px-8">
+          <div className="flex flex-1 flex-col justify-center overflow-y-auto px-8">
             <nav className="flex flex-col">
               {links.map((link, i) => (
                 <motion.div
