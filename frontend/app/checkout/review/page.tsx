@@ -1,12 +1,13 @@
 "use client";
-import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { Loader2, MapPin, Pencil, ShieldCheck, Tag } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 import CheckoutProgress from "@/components/checkout/CheckoutProgress";
+import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
 import { useAuthStore } from "@/src/hooks/useAuthStore";
@@ -35,7 +36,10 @@ export default function ReviewPage() {
   const discountPercent = useCheckoutStore((s) => s.discountPercent);
   const confirmedTotals = useCheckoutStore((s) => s.confirmedTotals);
   const applyPromo = useCheckoutStore((s) => s.applyPromo);
+  const revalidatePromo = useCheckoutStore((s) => s.revalidatePromo);
+  const promoRevalidating = useCheckoutStore((s) => s.promoRevalidating);
   const placeOrder = useCheckoutStore((s) => s.placeOrder);
+  const resetCheckout = useCheckoutStore((s) => s.resetCheckout);
 
   const currency = useCurrencyStore((s) => s.currency);
   const rates = useCurrencyStore((s) => s.rates);
@@ -61,6 +65,22 @@ export default function ReviewPage() {
       router.replace(!shipping ? "/checkout/shipping" : "/checkout/payment");
     }
   }, [ready, shipping, paymentMethod, router]);
+
+  // Safety net for the same staleness issue as the cart page — if this
+  // page is somehow reached without having just come through Cart or
+  // Payment in this session (a stale bookmark, back-forward-cache restore
+  // days later), re-check the stored promo rather than trust it blindly.
+  // Cart already does this on its own mount, so in the normal flow this
+  // is a no-op re-confirmation, not a duplicate discount check.
+  useEffect(() => {
+    const hadPromo = !!useCheckoutStore.getState().promoCode;
+    if (hadPromo) revalidatePromo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setPromoInput(promoCode);
+  }, [promoCode]);
 
   if (!ready || !shipping || !paymentMethod) {
     return (
@@ -132,6 +152,12 @@ export default function ReviewPage() {
         }
         placeOrder(data);
         clearCart();
+        // Clears shipping/paymentMethod/promoCode/confirmedTotals now that
+        // the order is placed, so the NEXT checkout starts clean instead
+        // of silently inheriting this order's address, payment choice, or
+        // locked-in totals. lastOrder/orders are untouched by this — the
+        // confirmation page still reads lastOrder normally.
+        resetCheckout();
         router.push("/checkout/confirmation");
       } catch {
         setOrderError("Something went wrong. Please try again.");
@@ -171,6 +197,7 @@ export default function ReviewPage() {
             const order = await verifyRazorpayPayment(response);
             placeOrder(order);
             clearCart();
+            resetCheckout();
             router.push("/checkout/confirmation");
           } catch (err) {
             setOrderError(err instanceof Error ? err.message : "Payment verification failed.");
@@ -261,12 +288,14 @@ export default function ReviewPage() {
                     value={promoInput}
                     onChange={(e) => setPromoInput(e.target.value)}
                     placeholder="Promo code"
-                    className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none"
+                    disabled={promoRevalidating}
+                    className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none disabled:opacity-60"
                   />
+                  {promoRevalidating && <Loader2 size={14} className="shrink-0 animate-spin text-muted" />}
                 </div>
                 <button
                   onClick={handleApplyPromo}
-                  disabled={promoApplying}
+                  disabled={promoApplying || promoRevalidating}
                   className="rounded-full border border-white/10 px-4 py-2.5 font-body text-xs text-ink hover:border-accent/50 hover:text-accent disabled:opacity-60"
                 >
                   {promoApplying ? "Checking…" : "Apply"}
