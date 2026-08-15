@@ -49,6 +49,11 @@ type EditableField =
   | "isNew"
   | "isSpotlight";
 
+// Fields where the stored value is expected to parse as a number.
+// compareAtPrice is exempt from the "empty string" check below since blank
+// legitimately means "no compare-at price set," not "invalid input."
+const NUMERIC_FIELDS: EditableField[] = ["price", "compareAtPrice", "stock", "weight", "rating"];
+
 interface GridRow {
   id: string;
   name: string;
@@ -64,6 +69,24 @@ interface GridRow {
   isSpotlight: boolean;
   rating: string;
   hasVariants: boolean;
+}
+
+// Returns the first numeric field that won't actually parse as a number,
+// or null if the row is clean. Catches things like accidentally typing
+// text into a Price/Weight cell (nothing stops that in the spreadsheet —
+// unlike the single-product modal's <input type="number">, these cells
+// are plain text so paste/typos can land anything). Without this check,
+// parseFloat("abc") -> NaN -> JSON.stringify(NaN) silently becomes `null`
+// on the wire, corrupting the field instead of failing loudly.
+function findInvalidNumericField(row: GridRow): EditableField | null {
+  for (const field of NUMERIC_FIELDS) {
+    const raw = row[field as keyof GridRow] as string;
+    if (field === "compareAtPrice" && raw.trim() === "") continue; // optional — blank is valid
+    if (field === "stock" && row.hasVariants) continue; // auto-computed, not user-edited
+    if (raw.trim() === "") continue; // buildPayload falls back to a sane default for these
+    if (Number.isNaN(parseFloat(raw))) return field;
+  }
+  return null;
 }
 
 function productToRow(p: Product): GridRow {
@@ -254,6 +277,19 @@ export default function BulkEditProductsPage() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showColumnMenu]);
+
+  // Cleanup on navigating away without saving or explicitly discarding —
+  // Discard already deletes anything left in pendingUploadsRef, but that
+  // only fires on an explicit button click. Leaving via the Back link,
+  // browser back, or closing the tab skipped it entirely, silently
+  // orphaning uploaded images in storage. Anything still in this ref when
+  // the component unmounts is, by definition, not yet saved (saves clear
+  // their own entries out of it), so it's always safe to delete here.
+  useEffect(() => {
+    return () => {
+      pendingUploadsRef.current.forEach((u) => deleteMedia(u.path));
+    };
+  }, []);
 
   const dirtyIds = useMemo(() => {
     const set = new Set<string>();
@@ -597,6 +633,7 @@ export default function BulkEditProductsPage() {
     const selected = isCellSelected(selection, rowIdx, colIdx);
     const isEditing = editingCell?.row === rowIdx && editingCell?.col === colIdx;
     const disabled = field === "stock" && row.hasVariants;
+    const invalidNumeric = NUMERIC_FIELDS.includes(field) && findInvalidNumericField(row) === field;
 
     if (BOOLEAN_FIELDS.has(field)) {
       return (
@@ -656,10 +693,12 @@ export default function BulkEditProductsPage() {
         onMouseDown={(e) => handleCellMouseDown(rowIdx, colIdx, e)}
         onDoubleClick={() => !disabled && startEdit(rowIdx, colIdx)}
         onKeyDown={(e) => handleCellKeyDown(rowIdx, colIdx, e)}
+        title={invalidNumeric ? "This needs to be a number before it can be saved." : undefined}
         className={cn(
           "min-h-[34px] rounded-lg border px-2 py-1.5 font-mono text-xs text-ink outline-none transition-colors",
           disabled ? "opacity-40" : "cursor-text",
-          selected ? "border-accent bg-accent/10" : "border-transparent hover:border-white/10 hover:bg-white/5"
+          invalidNumeric && !selected ? "border-accent2/50" : "",
+          selected ? "border-accent bg-accent/10" : !invalidNumeric && "border-transparent hover:border-white/10 hover:bg-white/5"
         )}
       >
         {isEditing ? (
@@ -724,10 +763,35 @@ export default function BulkEditProductsPage() {
   async function handleSaveAll() {
     const ids = Array.from(dirtyIds);
     if (ids.length === 0) return;
-    setSaving(true);
-    setSaveProgress({ done: 0, total: ids.length });
 
-    const items = ids.map((id) => {
+    // Numeric validation happens BEFORE anything hits the network. A row
+    // with e.g. text typed into Price is excluded from this save entirely
+    // (not sent as a corrupted `null`) and reported the same way a failed
+    // server-side save would be, so it's impossible to miss.
+    const invalidRows: { id: string; name: string; field: EditableField }[] = [];
+    const validIds: string[] = [];
+    ids.forEach((id) => {
+      const row = rows[id];
+      const badField = findInvalidNumericField(row);
+      if (badField) {
+        invalidRows.push({ id, name: row.name || "(unnamed)", field: badField });
+      } else {
+        validIds.push(id);
+      }
+    });
+
+    if (validIds.length === 0) {
+      showToast(
+        `Nothing saved — ${invalidRows.length} row${invalidRows.length !== 1 ? "s have" : " has"} an invalid number. Fix the highlighted cell${invalidRows.length !== 1 ? "s" : ""} and try again.`,
+        "error"
+      );
+      return;
+    }
+
+    setSaving(true);
+    setSaveProgress({ done: 0, total: validIds.length });
+
+    const items = validIds.map((id) => {
       const a = original[id];
       const b = rows[id];
       const changed = ALL_FIELDS.filter((f) => a[f] !== b[f]);
@@ -759,10 +823,16 @@ export default function BulkEditProductsPage() {
 
     setSaving(false);
 
-    if (result.errors.length === 0) {
+    const totalFailed = result.errors.length + invalidRows.length;
+    if (totalFailed === 0) {
       showToast(`${result.updated.length} product${result.updated.length !== 1 ? "s" : ""} saved`);
+    } else if (invalidRows.length > 0 && result.errors.length === 0) {
+      showToast(
+        `${result.updated.length} saved, ${invalidRows.length} skipped for invalid number${invalidRows.length !== 1 ? "s" : ""} — check the highlighted cells`,
+        "error"
+      );
     } else {
-      showToast(`${result.updated.length} saved, ${result.errors.length} failed — check those rows and retry`, "error");
+      showToast(`${result.updated.length} saved, ${totalFailed} failed — check those rows and retry`, "error");
     }
   }
 
