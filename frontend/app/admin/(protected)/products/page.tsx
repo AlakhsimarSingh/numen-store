@@ -8,6 +8,7 @@ import Fuse from "fuse.js";
 import {
   Check,
   CheckSquare,
+  Crop,
   LayoutGrid,
   Loader2,
   Pencil,
@@ -29,6 +30,7 @@ import { estimateProductShipping } from "@/src/lib/shipping";
 import { cn } from "@/src/lib/utils";
 import VariantsEditor from "@/components/admin/VariantsEditor";
 import ImageLightbox from "@/components/admin/ImageLightbox";
+import ImageCropModal from "@/components/admin/ImageCropModal";
 import { useRouter } from "next/navigation";
 
 const ease = [0.16, 1, 0.3, 1] as const;
@@ -101,6 +103,7 @@ function ImageSlot({
   onUpload,
   onClear,
   onView,
+  onRecrop,
   dragOver,
   dragging,
   onDragStartSlot,
@@ -116,6 +119,7 @@ function ImageSlot({
   onUpload: (file: File | undefined) => void;
   onClear: () => void;
   onView: () => void;
+  onRecrop: () => void;
   dragOver: boolean;
   dragging: boolean;
   onDragStartSlot: (e: React.DragEvent) => void;
@@ -140,12 +144,23 @@ function ImageSlot({
           onDragEnd={onDragEndSlot}
           onClick={onView}
           className={cn(
-            "relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border bg-surface2 border-white/10 transition-all",
+            "relative aspect-[3/4] w-full cursor-pointer overflow-hidden rounded-xl border bg-surface2 border-white/10 transition-all",
             dragOver && "ring-2 ring-inset ring-accent/60",
             dragging && "opacity-30"
           )}
         >
           <Image src={value} alt={label} fill sizes="200px" className="pointer-events-none object-cover" />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRecrop();
+            }}
+            className="absolute left-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-bg/80 text-ink backdrop-blur-sm hover:text-accent"
+            aria-label="Recrop"
+          >
+            <Crop size={13} />
+          </button>
           <button
             type="button"
             onClick={(e) => {
@@ -162,7 +177,7 @@ function ImageSlot({
           onDragOver={onDragOverSlot}
           onDrop={onDropSlot}
           className={cn(
-            "flex aspect-square w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed bg-bg text-muted transition-all hover:border-accent/40 hover:text-accent",
+            "flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed bg-bg text-muted transition-all hover:border-accent/40 hover:text-accent",
             dragOver ? "border-accent/60 ring-2 ring-inset ring-accent/60" : "border-white/15"
           )}
         >
@@ -209,6 +224,19 @@ export default function AdminProductsPage() {
   const [uploadingSlot, setUploadingSlot] = useState<ImageSlotKey | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+  // Crop-on-upload / recrop state for the three single-image slots (Main,
+  // Hover, Third). isBlobUrl distinguishes a freshly-picked local file
+  // (object URL — always croppable, never taints the canvas) from an
+  // already-uploaded remote image being recropped (subject to the host's
+  // CORS policy — see ImageCropModal's error handling).
+  const [cropTarget, setCropTarget] = useState<{
+    slot: ImageSlotKey;
+    src: string;
+    fileName: string;
+    mimeType: string;
+    isBlobUrl: boolean;
+  } | null>(null);
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const router = useRouter();
@@ -354,6 +382,39 @@ export default function AdminProductsPage() {
     } finally {
       setUploadingSlot(null);
     }
+  }
+
+  // Fires when a file is picked (or drag-dropped) into one of the three
+  // slots — instead of uploading immediately, opens the crop modal so the
+  // admin frames the product before anything is sent to storage.
+  function handleSlotFileSelected(slot: ImageSlotKey, file: File | undefined) {
+    if (!file) return;
+    const src = URL.createObjectURL(file);
+    setCropTarget({ slot, src, fileName: file.name, mimeType: file.type || "image/jpeg", isBlobUrl: true });
+  }
+
+  // Re-opens the crop modal against the slot's *already-uploaded* image so
+  // an existing product photo can be reframed without re-uploading from
+  // scratch. Loading a remote URL into the canvas requires the storage
+  // host to permit cross-origin reads — ImageCropModal surfaces a clear
+  // error via toast if that fails.
+  function handleSlotRecrop(slot: ImageSlotKey) {
+    const url = form[slot];
+    if (!url) return;
+    setCropTarget({ slot, src: url, fileName: `${slot}.jpg`, mimeType: "image/jpeg", isBlobUrl: false });
+  }
+
+  async function handleCropConfirm(file: File) {
+    if (!cropTarget) return;
+    const { slot, src, isBlobUrl } = cropTarget;
+    if (isBlobUrl) URL.revokeObjectURL(src);
+    setCropTarget(null);
+    await handleSlotUpload(slot, file);
+  }
+
+  function handleCropCancel() {
+    if (cropTarget?.isBlobUrl) URL.revokeObjectURL(cropTarget.src);
+    setCropTarget(null);
   }
 
   async function handleVideoUpload(file: File | undefined) {
@@ -725,7 +786,7 @@ export default function AdminProductsPage() {
                 isSelected ? "border-accent ring-2 ring-inset ring-accent" : "border-white/5 hover:border-white/10"
               )}
             >
-              <div className="relative aspect-square bg-surface2">
+              <div className="relative aspect-[3/4] bg-surface2">
                 <Image
                   src={p.image}
                   alt={p.name}
@@ -1008,7 +1069,8 @@ export default function AdminProductsPage() {
                         hint="Shown on the product card and as the default gallery image."
                         value={form.image}
                         uploading={uploadingSlot === "image"}
-                        onUpload={(f) => handleSlotUpload("image", f)}
+                        onUpload={(f) => handleSlotFileSelected("image", f)}
+                        onRecrop={() => handleSlotRecrop("image")}
                         onClear={() => setForm((f) => ({ ...f, image: "" }))}
                         onView={() => form.image && setLightboxSrc(form.image)}
                         {...imageSlotProps("image")}
@@ -1018,7 +1080,8 @@ export default function AdminProductsPage() {
                         hint="Flashes in when a shopper hovers the product card."
                         value={form.hoverImage}
                         uploading={uploadingSlot === "hoverImage"}
-                        onUpload={(f) => handleSlotUpload("hoverImage", f)}
+                        onUpload={(f) => handleSlotFileSelected("hoverImage", f)}
+                        onRecrop={() => handleSlotRecrop("hoverImage")}
                         onClear={() => setForm((f) => ({ ...f, hoverImage: "" }))}
                         onView={() => form.hoverImage && setLightboxSrc(form.hoverImage)}
                         {...imageSlotProps("hoverImage")}
@@ -1028,7 +1091,8 @@ export default function AdminProductsPage() {
                         hint="Extra shot shown only in the product page gallery."
                         value={form.thirdImage}
                         uploading={uploadingSlot === "thirdImage"}
-                        onUpload={(f) => handleSlotUpload("thirdImage", f)}
+                        onUpload={(f) => handleSlotFileSelected("thirdImage", f)}
+                        onRecrop={() => handleSlotRecrop("thirdImage")}
                         onClear={() => setForm((f) => ({ ...f, thirdImage: "" }))}
                         onView={() => form.thirdImage && setLightboxSrc(form.thirdImage)}
                         {...imageSlotProps("thirdImage")}
@@ -1167,6 +1231,17 @@ export default function AdminProductsPage() {
       )}
 
       {lightboxSrc && <ImageLightbox src={lightboxSrc} alt="Product image" onClose={() => setLightboxSrc(null)} />}
+
+      {cropTarget && (
+        <ImageCropModal
+          imageSrc={cropTarget.src}
+          fileName={cropTarget.fileName}
+          mimeType={cropTarget.mimeType}
+          aspect={3 / 4}
+          onCancel={handleCropCancel}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   );
 }

@@ -22,6 +22,7 @@ import SizeGuideModal from "./SizeGuideModal";
 import ReviewsSection from "./ReviewsSection";
 import { useProductPrice } from "@/src/hooks/useProductPrice";
 
+
 /* eslint-disable @next/next/no-img-element -- the glitch overlay below uses
    plain <img> for short-lived decorative duplicates of the active image;
    next/image's optimizer adds nothing here and would complicate the
@@ -286,7 +287,7 @@ export default function ProductDetail({
                       onClick={() => goToMedia(i)}
                       aria-label={item.type === "video" ? "Play product video" : `View image ${i + 1}`}
                       aria-current={isActive}
-                      className="group relative aspect-square w-16 shrink-0 overflow-hidden rounded-2xl bg-surface2 lg:w-full"
+                      className="group relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-2xl bg-surface2 lg:w-full"
                     >
                       {item.type === "video" ? (
                         <video src={item.src} muted playsInline className="h-full w-full object-cover" />

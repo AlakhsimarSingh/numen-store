@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Plus, Trash2, UploadCloud } from "lucide-react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
+import { Crop, Loader2, Plus, Trash2, UploadCloud, X } from "lucide-react";
 import { ColorOption, VariantStockEntry } from "@/src/types";
 import { uploadMedia } from "@/src/lib/media";
+import ImageCropModal from "@/components/admin/ImageCropModal";
 
 interface Props {
   colors: ColorOption[];
   sizes: string[];
   variantStock: VariantStockEntry[];
   onChange: (data: { colors: ColorOption[]; sizes: string[]; variantStock: VariantStockEntry[] }) => void;
-  /** Called after every successful upload so the parent can clean it up if the modal is abandoned. */
   onMediaUploaded?: (url: string, path: string) => void;
 }
 
@@ -25,10 +26,29 @@ function rebuildMatrix(colors: ColorOption[], sizes: string[], existing: Variant
   );
 }
 
+type CropJob = {
+  colorIndex: number;
+  src: string;
+  fileName: string;
+  mimeType: string;
+  isBlobUrl: boolean;
+  replaceIndex: number | null; // null = append new image; number = recrop existing at that index
+};
+
 export default function VariantsEditor({ colors, sizes, variantStock, onChange, onMediaUploaded }: Props) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [uploadingVideoIndex, setUploadingVideoIndex] = useState<number | null>(null);
+
+  const [cropQueue, setCropQueue] = useState<CropJob[]>([]);
+  const [activeCrop, setActiveCrop] = useState<CropJob | null>(null);
+
+  useEffect(() => {
+    if (!activeCrop && cropQueue.length > 0) {
+      setActiveCrop(cropQueue[0]);
+      setCropQueue((q) => q.slice(1));
+    }
+  }, [activeCrop, cropQueue]);
 
   function updateColors(next: ColorOption[]) {
     onChange({ colors: next, sizes, variantStock: rebuildMatrix(next, sizes, variantStock) });
@@ -53,25 +73,64 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
   function editColor(index: number, updates: Partial<ColorOption>) {
     updateColors(colors.map((c, i) => (i === index ? { ...c, ...updates } : c)));
   }
+  function removeColorImage(colorIndex: number, imgIndex: number) {
+    editColor(colorIndex, { images: colors[colorIndex].images.filter((_, i) => i !== imgIndex) });
+  }
 
-  async function handleImageUpload(index: number, files: FileList | null) {
+  function handleImageFilesSelected(colorIndex: number, files: FileList | null) {
     if (!files || files.length === 0) return;
-    setUploadingIndex(index);
+    const jobs: CropJob[] = Array.from(files).map((file) => ({
+      colorIndex,
+      src: URL.createObjectURL(file),
+      fileName: file.name,
+      mimeType: file.type || "image/jpeg",
+      isBlobUrl: true,
+      replaceIndex: null,
+    }));
+    setCropQueue((q) => [...q, ...jobs]);
+  }
+
+  function openRecrop(colorIndex: number, imgIndex: number, url: string) {
+    setCropQueue((q) => [
+      ...q,
+      { colorIndex, src: url, fileName: `color-${colorIndex}-${imgIndex}.jpg`, mimeType: "image/jpeg", isBlobUrl: false, replaceIndex: imgIndex },
+    ]);
+  }
+
+  async function handleCropConfirm(file: File) {
+    if (!activeCrop) return;
+    const { colorIndex, src, isBlobUrl, replaceIndex } = activeCrop;
+    if (isBlobUrl) URL.revokeObjectURL(src);
+    setActiveCrop(null);
+
+    setUploadingIndex(colorIndex);
     setUploadError(null);
     try {
-      const uploaded: string[] = [];
-      for (const file of Array.from(files)) {
-        // eslint-disable-next-line no-await-in-loop
-        const { url, path } = await uploadMedia(file);
-        uploaded.push(url);
-        onMediaUploaded?.(url, path);
-      }
-      editColor(index, { images: [...colors[index].images, ...uploaded] });
+      const { url, path } = await uploadMedia(file);
+      onMediaUploaded?.(url, path);
+      setColorsRef.current(colorIndex, replaceIndex, url);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setUploadingIndex(null);
     }
+  }
+
+  // Reads latest `colors` at call time (avoids stale closures across the
+  // async gap while a crop/upload is in flight and the queue keeps moving).
+  const setColorsRef = { current: (colorIndex: number, replaceIndex: number | null, url: string) => {
+    const current = colors[colorIndex];
+    if (!current) return;
+    const nextImages =
+      replaceIndex === null
+        ? [...current.images, url]
+        : current.images.map((img, i) => (i === replaceIndex ? url : img));
+    editColor(colorIndex, { images: nextImages });
+  } };
+
+  function handleCropCancel() {
+    if (activeCrop?.isBlobUrl) URL.revokeObjectURL(activeCrop.src);
+    setActiveCrop(null);
   }
 
   async function handleVideoUpload(index: number, file: File | undefined) {
@@ -94,7 +153,6 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
 
   return (
     <div className="space-y-6">
-      {/* Colors */}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <label className="font-body text-xs text-muted">Colors (optional)</label>
@@ -124,30 +182,46 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
                 </button>
               </div>
 
-              <div className="mt-2 flex items-start gap-2">
-                <textarea
-                  value={color.images.join("\n")}
-                  onChange={(e) => editColor(i, { images: e.target.value.split("\n").map((s) => s.trim()).filter(Boolean) })}
-                  placeholder="Image URLs, one per line"
-                  rows={2}
-                  className="w-full resize-none rounded-lg border border-white/10 bg-surface px-3 py-1.5 font-body text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
-                />
-                <label className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-white/10 bg-surface px-2.5 py-1.5 font-body text-[11px] text-muted hover:text-accent">
-                  {uploadingIndex === i ? <Loader2 size={13} className="animate-spin" /> : <UploadCloud size={13} />}
-                  Upload
+              <div className="mt-2 flex flex-wrap gap-2">
+                {color.images.map((imgUrl, imgIdx) => (
+                  <div key={imgUrl + imgIdx} className="group relative aspect-[3/4] w-16 overflow-hidden rounded-lg border border-white/10 bg-surface2">
+                    <Image src={imgUrl} alt="" fill sizes="64px" className="object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => openRecrop(i, imgIdx, imgUrl)}
+                      className="absolute left-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-bg/80 text-ink hover:text-accent"
+                      aria-label="Recrop"
+                    >
+                      <Crop size={9} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeColorImage(i, imgIdx)}
+                      className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-bg/80 text-ink hover:text-accent2"
+                      aria-label="Remove"
+                    >
+                      <X size={9} />
+                    </button>
+                  </div>
+                ))}
+                <label className="flex aspect-[3/4] w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 bg-bg text-muted hover:border-accent/40 hover:text-accent">
+                  {uploadingIndex === i ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                  <span className="font-mono text-[9px] uppercase">Add</span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     className="hidden"
                     onChange={(e) => {
-                      const files = e.target.files;
-                      handleImageUpload(i, files);
+                      handleImageFilesSelected(i, e.target.files);
                       e.target.value = "";
                     }}
                   />
                 </label>
               </div>
+              {color.images.length === 0 && (
+                <p className="mt-1 font-body text-[11px] text-muted">No images yet for this color.</p>
+              )}
 
               <div className="mt-2 flex items-center gap-2">
                 <input
@@ -177,7 +251,6 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
         </div>
       </div>
 
-      {/* Sizes */}
       <div>
         <label className="mb-1.5 block font-body text-xs text-muted">Sizes (comma separated, optional)</label>
         <input
@@ -188,7 +261,6 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
         />
       </div>
 
-      {/* Stock matrix */}
       {(colors.length > 0 || sizes.length > 0) && (
         <div>
           <label className="mb-2 block font-body text-xs text-muted">Stock per variant</label>
@@ -226,6 +298,17 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
             </table>
           </div>
         </div>
+      )}
+
+      {activeCrop && (
+        <ImageCropModal
+          imageSrc={activeCrop.src}
+          fileName={activeCrop.fileName}
+          mimeType={activeCrop.mimeType}
+          aspect={3 / 4}
+          onCancel={handleCropCancel}
+          onConfirm={handleCropConfirm}
+        />
       )}
     </div>
   );
