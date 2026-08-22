@@ -284,6 +284,8 @@ model Order {
   razorpayOrderId   String?       @unique
   razorpayPaymentId String?       @unique
 
+  promoCode      String?         // code applied at checkout, if any — copied from PendingCheckout on order creation
+
   shippingSnapshot Json          // frozen copy of address at time of order
 
   returnStatus  ReturnStatus?
@@ -295,6 +297,7 @@ model Order {
   items    OrderItem[]
 
   @@index([userId])
+  @@index([promoCode])
 }
 
 model PendingCheckout {

@@ -115,6 +115,9 @@ export default function AdminPromotionsPage() {
               </button>
             </div>
             <p className="mt-2 font-display text-2xl font-bold text-ink">{p.percent}% off</p>
+            <p className="mt-1 font-body text-xs text-muted">
+              Used {p.usageCount} time{p.usageCount !== 1 ? "s" : ""}
+            </p>
             <button
               onClick={() => handleToggleActive(p)}
               className={cn(

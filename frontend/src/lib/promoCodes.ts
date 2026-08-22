@@ -2,6 +2,7 @@ export interface PromoCode {
   code: string;
   percent: number;
   active: boolean;
+  usageCount: number;
 }
 
 export async function fetchPromoCodes(): Promise<PromoCode[]> {

@@ -82,6 +82,7 @@ export function serializeOrder(order: OrderWithItems) {
     codFee: Number(order.codFee),
     total: Number(order.total),
     currency: order.currency,
+    promoCode: order.promoCode ?? undefined,
     paymentStatus: order.paymentStatus.toLowerCase(),
     shipping: order.shippingSnapshot,
     paymentMethod: PAYMENT_METHOD_REVERSE[order.paymentMethod as keyof typeof PAYMENT_METHOD_REVERSE],

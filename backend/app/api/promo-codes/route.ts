@@ -6,8 +6,25 @@ export async function GET() {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const promoCodes = await prisma.promoCode.findMany({ orderBy: { code: "asc" } });
-  return NextResponse.json(promoCodes);
+  const [promoCodes, usageCounts] = await Promise.all([
+    prisma.promoCode.findMany({ orderBy: { code: "asc" } }),
+    // Only counts orders where payment actually succeeded — a code entered
+    // on an abandoned or failed checkout was never really "used".
+    prisma.order.groupBy({
+      by: ["promoCode"],
+      where: { promoCode: { not: null }, paymentStatus: "PAID" },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const countByCode = new Map(usageCounts.map((u) => [u.promoCode, u._count._all]));
+
+  const withCounts = promoCodes.map((p) => ({
+    ...p,
+    usageCount: countByCode.get(p.code) ?? 0,
+  }));
+
+  return NextResponse.json(withCounts);
 }
 
 export async function POST(req: NextRequest) {
@@ -26,7 +43,7 @@ export async function POST(req: NextRequest) {
     const promo = await prisma.promoCode.create({
       data: { code, percent, active: body?.active ?? true },
     });
-    return NextResponse.json(promo, { status: 201 });
+    return NextResponse.json({ ...promo, usageCount: 0 }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "That code already exists." }, { status: 409 });
   }

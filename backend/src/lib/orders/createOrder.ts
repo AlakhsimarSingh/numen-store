@@ -146,6 +146,10 @@ export async function createOrderFromItems(params: {
     const promo = await prisma.promoCode.findUnique({ where: { code: normalizedPromo } });
     if (promo?.active) discountPercent = promo.percent;
   }
+  // Only record the code on the order if it actually applied a discount —
+  // a typo'd or inactive code shouldn't count toward that code's usage
+  // stats in the admin panel.
+  const appliedPromoCode = discountPercent > 0 ? normalizedPromo : undefined;
 
   const settingsRow = await prisma.siteSettings.findUnique({ where: { id: 1 } });
   const orderSettings = settingsRow
@@ -192,6 +196,7 @@ export async function createOrderFromItems(params: {
         paymentStatus,
         razorpayOrderId,
         razorpayPaymentId,
+        promoCode: appliedPromoCode,
         shippingSnapshot: shipping as unknown as Prisma.InputJsonValue,
         items: {
           create: items.map((item) => {
