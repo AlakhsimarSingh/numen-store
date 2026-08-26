@@ -285,7 +285,8 @@ export default function AdminOrdersPage() {
                   )}
                 </div>
               </div>
-              
+            </div>
+
             {/* Items */}
             <div className="mt-4 rounded-xl border border-white/5 bg-bg p-4">
               <p className="mb-3 font-mono text-xs uppercase tracking-widest text-accent">
