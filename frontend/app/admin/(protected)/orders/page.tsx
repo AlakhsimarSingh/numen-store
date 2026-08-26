@@ -264,15 +264,16 @@ export default function AdminOrdersPage() {
               <div className="rounded-xl border border-white/5 bg-bg p-4">
                 <p className="font-mono text-xs uppercase tracking-widest text-accent">Shipping to</p>
                 <div className="mt-1.5 font-body text-sm">
-                  <p className="text-ink">{selected.shipping?.fullName}</p>
-                  <p className="text-muted">{selected.shipping.phone}</p>
+                  <p className="text-ink">{selected.shipping?.fullName || "—"}</p>
+                  <p className="text-muted">{selected.shipping?.phone || "—"}</p>
                   <p className="mt-1 text-muted">
-                    {selected.shipping.addressLine1}
-                    {selected.shipping.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}, {selected.shipping.city}
-                    , {selected.shipping.state} {selected.shipping.zip}
+                    {selected.shipping?.addressLine1}
+                    {selected.shipping?.addressLine2 ? `, ${selected.shipping.addressLine2}` : ""}
+                    {selected.shipping?.city ? `, ${selected.shipping.city}` : ""}
+                    {selected.shipping?.state ? `, ${selected.shipping.state}` : ""} {selected.shipping?.zip}
                   </p>
-                  <p className="text-muted">{selected.shipping.country}</p>
-                  {selected.shipping.lat != null && selected.shipping.lng != null && (
+                  <p className="text-muted">{selected.shipping?.country}</p>
+                  {selected.shipping?.lat != null && selected.shipping?.lng != null && (
                     <a
                       href={`https://www.google.com/maps?q=${selected.shipping.lat},${selected.shipping.lng}`}
                       target="_blank"
@@ -284,8 +285,7 @@ export default function AdminOrdersPage() {
                   )}
                 </div>
               </div>
-            </div>
-
+              
             {/* Items */}
             <div className="mt-4 rounded-xl border border-white/5 bg-bg p-4">
               <p className="mb-3 font-mono text-xs uppercase tracking-widest text-accent">
