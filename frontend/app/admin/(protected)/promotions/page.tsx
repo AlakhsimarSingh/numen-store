@@ -154,10 +154,17 @@ export default function AdminPromotionsPage() {
                   className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50" />
               </div>
               <div>
-                <label className="mb-1.5 block font-body text-xs text-muted">Discount %</label>
-                <input type="number" min={1} max={100} value={percent} onChange={(e) => setPercent(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink focus:outline-none focus:border-accent/50" />
-              </div>
+              <label className="mb-1.5 block font-body text-xs text-muted">Discount %</label>
+              <input
+                type="number"
+                min={0.01}
+                max={100}
+                step={0.01}
+                value={percent}
+                onChange={(e) => setPercent(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink focus:outline-none focus:border-accent/50"
+              />
+            </div>
               <button type="submit" disabled={saving}
                 className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-3 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01] disabled:opacity-70">
                 {saving && <Loader2 size={16} className="animate-spin" />}
