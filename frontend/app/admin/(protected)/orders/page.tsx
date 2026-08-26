@@ -113,8 +113,8 @@ export default function AdminOrdersPage() {
               </div>
 
               <div className="min-w-0">
-                <p className="truncate font-body text-sm text-ink">{o.customer.name || "Unnamed customer"}</p>
-                <p className="truncate font-body text-[11px] text-muted">{o.customer.email}</p>
+                <p className="truncate font-body text-sm text-ink">{o.customer?.name || "Unnamed customer"}</p>
+                <p className="truncate font-body text-[11px] text-muted">{o.customer?.email || "—"}</p>
               </div>
 
               <span className="font-body text-xs text-muted">
@@ -222,9 +222,9 @@ export default function AdminOrdersPage() {
             {/* Customer */}
             <div className="mt-4 rounded-xl border border-white/5 bg-bg p-4">
               <p className="font-mono text-xs uppercase tracking-widest text-accent">Customer</p>
-              <p className="mt-1.5 font-body text-sm text-ink">{selected.customer.name || "Unnamed customer"}</p>
-              <p className="break-all font-body text-sm text-muted">{selected.customer.email}</p>
-              {selected.customer.phone && <p className="font-body text-sm text-muted">{selected.customer.phone}</p>}
+              <p className="mt-1.5 font-body text-sm text-ink">{selected.customer?.name || "Unnamed customer"}</p>
+              <p className="break-all font-body text-sm text-muted">{selected.customer?.email || "Unknown"}</p>
+              {selected.customer?.phone && <p className="font-body text-sm text-muted">{selected.customer?.phone}</p>}
             </div>
 
             {/* Payment + Shipping */}
@@ -264,7 +264,7 @@ export default function AdminOrdersPage() {
               <div className="rounded-xl border border-white/5 bg-bg p-4">
                 <p className="font-mono text-xs uppercase tracking-widest text-accent">Shipping to</p>
                 <div className="mt-1.5 font-body text-sm">
-                  <p className="text-ink">{selected.shipping.fullName}</p>
+                  <p className="text-ink">{selected.shipping?.fullName}</p>
                   <p className="text-muted">{selected.shipping.phone}</p>
                   <p className="mt-1 text-muted">
                     {selected.shipping.addressLine1}
