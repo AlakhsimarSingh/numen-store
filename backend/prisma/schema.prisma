@@ -384,7 +384,7 @@ model RecentlyViewed {
 
 model PromoCode {
   code    String  @id
-  percent Int
+  percent Float
   active  Boolean @default(true)
 }
 

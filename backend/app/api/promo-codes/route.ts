@@ -8,8 +8,6 @@ export async function GET() {
 
   const [promoCodes, usageCounts] = await Promise.all([
     prisma.promoCode.findMany({ orderBy: { code: "asc" } }),
-    // Only counts orders where payment actually succeeded — a code entered
-    // on an abandoned or failed checkout was never really "used".
     prisma.order.groupBy({
       by: ["promoCode"],
       where: { promoCode: { not: null }, paymentStatus: "PAID" },
@@ -33,11 +31,14 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   const code = body?.code?.trim().toUpperCase();
-  const percent = Number(body?.percent);
+  const rawPercent = Number(body?.percent);
 
-  if (!code || !Number.isInteger(percent) || percent < 1 || percent > 100) {
-    return NextResponse.json({ error: "Invalid code or percent (1-100)." }, { status: 400 });
+  if (!code || !Number.isFinite(rawPercent) || rawPercent < 0.01 || rawPercent > 100) {
+    return NextResponse.json({ error: "Invalid code or percent (0.01–100)." }, { status: 400 });
   }
+  // Cap to 2 decimal places — no practical reason to store more precision
+  // than a cent-level percentage, and it keeps displayed values tidy.
+  const percent = Math.round(rawPercent * 100) / 100;
 
   try {
     const promo = await prisma.promoCode.create({
