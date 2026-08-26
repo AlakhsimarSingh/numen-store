@@ -1,4 +1,4 @@
-import type { Order, OrderItem } from "@prisma/client";
+import type { Order, OrderItem, User } from "@prisma/client";
 import { convertBaseAmount } from "@/lib/currency/currency";
 
 export interface OrderSettings {
@@ -43,7 +43,6 @@ export function computeTotals({
   discountPercent: number;
   paymentMethod: "CARD" | "UPI" | "COD";
   settings?: OrderSettings;
-  /** Currency `subtotal` is already expressed in — used to convert the flat INR fee settings into the same currency. */
   currency?: string;
   rates?: Record<string, number>;
 }) {
@@ -61,6 +60,7 @@ export function computeTotals({
 }
 
 type OrderWithItems = Order & { items: OrderItem[] };
+type OrderWithItemsAndUser = OrderWithItems & { user: Pick<User, "id" | "name" | "email" | "phone"> };
 
 export function serializeOrder(order: OrderWithItems) {
   return {
@@ -96,5 +96,28 @@ export function serializeOrder(order: OrderWithItems) {
           status: order.returnStatus.toLowerCase(),
         }
       : undefined,
+  };
+}
+
+/**
+ * Admin-only view of an order — everything serializeOrder returns, plus
+ * customer identity (name/email/phone from the User relation) and payment
+ * gateway reference IDs for support lookups. Never exposed to the
+ * customer-facing /api/orders endpoints, only /api/admin/orders — this is
+ * the boundary that keeps another customer's PII from leaking through the
+ * regular order-lookup routes.
+ */
+export function serializeAdminOrder(order: OrderWithItemsAndUser) {
+  return {
+    ...serializeOrder(order),
+    totalBaseINR: Number(order.totalBaseINR),
+    razorpayOrderId: order.razorpayOrderId ?? undefined,
+    razorpayPaymentId: order.razorpayPaymentId ?? undefined,
+    customer: {
+      id: order.user.id,
+      name: order.user.name ?? undefined,
+      email: order.user.email,
+      phone: order.user.phone ?? undefined,
+    },
   };
 }

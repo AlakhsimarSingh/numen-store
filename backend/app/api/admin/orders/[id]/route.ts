@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
-import { serializeOrder, STATUS_MAP } from "@/lib/order/order";
+import { serializeAdminOrder, STATUS_MAP } from "@/lib/order/order";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
@@ -39,8 +39,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const updated = await prisma.order.update({
     where: { id },
     data,
-    include: { items: true },
+    include: {
+      items: true,
+      user: { select: { id: true, name: true, email: true, phone: true } },
+    },
   });
 
-  return NextResponse.json(serializeOrder(updated));
+  return NextResponse.json(serializeAdminOrder(updated));
 }
