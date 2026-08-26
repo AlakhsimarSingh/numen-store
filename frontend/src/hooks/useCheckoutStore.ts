@@ -76,6 +76,7 @@ interface CheckoutState {
   setPaymentMethod: (m: PaymentMethodId) => void;
   applyPromo: (code: string) => Promise<boolean>;
   revalidatePromo: () => Promise<void>;
+  clearPromo: () => void;
   setConfirmedTotals: (totals: ConfirmedTotals) => void;
   placeOrder: (order: OrderSnapshot) => void;
   resetCheckout: () => void;
@@ -144,6 +145,12 @@ export const useCheckoutStore = create<CheckoutState>()(
           set({ promoRevalidating: false });
         }
       },
+      // Manual removal, triggered by the customer (e.g. an "×" next to the
+      // applied-code confirmation on the cart page) — unlike
+      // revalidatePromo, this doesn't hit the server at all, since intent
+      // here is simply "I don't want this code anymore," not "check if
+      // it's still valid."
+      clearPromo: () => set({ promoCode: "", discountPercent: 0 }),
       setConfirmedTotals: (confirmedTotals) => set({ confirmedTotals }),
       placeOrder: (order) => set((state) => ({ lastOrder: order, orders: [order, ...state.orders] })),
       resetCheckout: () =>
