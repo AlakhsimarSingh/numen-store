@@ -39,6 +39,11 @@ export default function AdminPromotionsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!code.trim() || !percent) return;
+    const numericPercent = Number(percent);
+    if (!Number.isFinite(numericPercent) || numericPercent < 0.01 || numericPercent > 100) {
+      showToast("Discount must be between 0.01 and 100%.", "error");
+      return;
+    }
     const upperCode = code.trim().toUpperCase();
     if (promoCodes.some((p) => p.code === upperCode)) {
       showToast("That code already exists", "error");
@@ -46,7 +51,7 @@ export default function AdminPromotionsPage() {
     }
     setSaving(true);
     try {
-      const created = await createPromoCode({ code: upperCode, percent: parseFloat(percent), active: true });
+      const created = await createPromoCode({ code: upperCode, percent: numericPercent, active: true });
       setPromoCodes((prev) => [created, ...prev]);
       showToast("Promo code created");
       setModalOpen(false);
@@ -159,7 +164,7 @@ export default function AdminPromotionsPage() {
                 type="number"
                 min={0.01}
                 max={100}
-                step={0.01}
+                step="any"
                 value={percent}
                 onChange={(e) => setPercent(e.target.value)}
                 className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink focus:outline-none focus:border-accent/50"
