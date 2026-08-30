@@ -270,6 +270,7 @@ model Order {
   userId         String
   user           User            @relation(fields: [userId], references: [id])
   subtotal       Decimal         @db.Decimal(10, 2)
+  subtotalBaseINR Decimal        @db.Decimal(10, 2) @default(0)
   discount       Decimal         @db.Decimal(10, 2) @default(0)
   shippingFee    Decimal         @db.Decimal(10, 2) @default(0)
   tax            Decimal         @db.Decimal(10, 2) @default(0)
@@ -284,9 +285,9 @@ model Order {
   razorpayOrderId   String?       @unique
   razorpayPaymentId String?       @unique
 
-  promoCode      String?         // code applied at checkout, if any — copied from PendingCheckout on order creation
+  promoCode      String?
 
-  shippingSnapshot Json          // frozen copy of address at time of order
+  shippingSnapshot Json
 
   returnStatus  ReturnStatus?
   returnReason  String?

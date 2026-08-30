@@ -185,6 +185,7 @@ export async function createOrderFromItems(params: {
       data: {
         userId,
         subtotal: subtotalCharged,
+        subtotalBaseINR,
         discount: chargedTotals.discount,
         shippingFee: chargedTotals.shippingFee,
         tax: chargedTotals.tax,
