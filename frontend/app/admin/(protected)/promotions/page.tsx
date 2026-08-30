@@ -9,6 +9,9 @@ import { createPromoCode, deletePromoCode, fetchPromoCodes, PromoCode, updatePro
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
+const formatINR = (value: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
+
 export default function AdminPromotionsPage() {
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,11 +42,6 @@ export default function AdminPromotionsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!code.trim() || !percent) return;
-    const numericPercent = Number(percent);
-    if (!Number.isFinite(numericPercent) || numericPercent < 0.01 || numericPercent > 100) {
-      showToast("Discount must be between 0.01 and 100%.", "error");
-      return;
-    }
     const upperCode = code.trim().toUpperCase();
     if (promoCodes.some((p) => p.code === upperCode)) {
       showToast("That code already exists", "error");
@@ -51,7 +49,7 @@ export default function AdminPromotionsPage() {
     }
     setSaving(true);
     try {
-      const created = await createPromoCode({ code: upperCode, percent: numericPercent, active: true });
+      const created = await createPromoCode({ code: upperCode, percent: parseFloat(percent), active: true });
       setPromoCodes((prev) => [created, ...prev]);
       showToast("Promo code created");
       setModalOpen(false);
@@ -123,6 +121,9 @@ export default function AdminPromotionsPage() {
             <p className="mt-1 font-body text-xs text-muted">
               Used {p.usageCount} time{p.usageCount !== 1 ? "s" : ""}
             </p>
+            <p className="mt-0.5 font-body text-xs text-muted">
+              {formatINR(p.totalSubtotalINR)} in orders
+            </p>
             <button
               onClick={() => handleToggleActive(p)}
               className={cn(
@@ -159,17 +160,17 @@ export default function AdminPromotionsPage() {
                   className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50" />
               </div>
               <div>
-              <label className="mb-1.5 block font-body text-xs text-muted">Discount %</label>
-              <input
-                type="number"
-                min={0.01}
-                max={100}
-                step="any"
-                value={percent}
-                onChange={(e) => setPercent(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink focus:outline-none focus:border-accent/50"
-              />
-            </div>
+                <label className="mb-1.5 block font-body text-xs text-muted">Discount %</label>
+                <input
+                  type="number"
+                  min={0.01}
+                  max={100}
+                  step={0.01}
+                  value={percent}
+                  onChange={(e) => setPercent(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink focus:outline-none focus:border-accent/50"
+                />
+              </div>
               <button type="submit" disabled={saving}
                 className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-3 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01] disabled:opacity-70">
                 {saving && <Loader2 size={16} className="animate-spin" />}
