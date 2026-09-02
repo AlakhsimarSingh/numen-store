@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS: SiteSettingsDTO = {
   tagline: "Wear the Drop",
   heroHeadlineLines: ["WEAR", "THE", "DROP."],
   heroSubtext: "26 categories. Zero filler. Premium fits at prices that don't punish you for having taste.",
-  heroImage: "/hero-bg.jpg",
+  heroImage: "/hero-bg.jpeg",
   freeShippingThreshold: 75,
   shippingFee: 6.99,
   taxRate: 0.08,

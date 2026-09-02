@@ -240,7 +240,7 @@ CREATE TABLE "SiteSettings" (
     "tagline" TEXT NOT NULL DEFAULT 'Wear the Drop',
     "heroHeadlineLines" TEXT[] DEFAULT ARRAY['WEAR', 'THE', 'DROP.']::TEXT[],
     "heroSubtext" TEXT NOT NULL DEFAULT '',
-    "heroImage" TEXT NOT NULL DEFAULT '/hero-bg.jpg',
+    "heroImage" TEXT NOT NULL DEFAULT '/hero-bg.jpeg',
     "freeShippingThreshold" DECIMAL(10,2) NOT NULL DEFAULT 75,
     "shippingFee" DECIMAL(10,2) NOT NULL DEFAULT 6.99,
     "taxRate" DOUBLE PRECISION NOT NULL DEFAULT 0.08,

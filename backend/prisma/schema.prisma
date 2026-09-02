@@ -395,7 +395,7 @@ model SiteSettings {
   tagline                String  @default("Wear the Drop")
   heroHeadlineLines      String[] @default(["WEAR", "THE", "DROP."])
   heroSubtext            String  @default("")
-  heroImage              String  @default("/hero-bg.jpg")
+  heroImage              String  @default("/hero-bg.jpeg")
   freeShippingThreshold  Decimal @db.Decimal(10, 2) @default(75)
   shippingFee            Decimal @db.Decimal(10, 2) @default(6.99)
   taxRate                Float   @default(0.08)
