@@ -72,17 +72,23 @@ export default function PartnerPicker({ onClose }: { onClose: () => void }) {
                 key={p.code}
                 onClick={() => handleSelect(p)}
                 disabled={applyingCode !== null}
-                className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-bg p-3.5 text-left transition-colors hover:border-accent/40 disabled:opacity-60"
+                className="flex w-full items-start gap-3 rounded-xl border border-white/10 bg-bg p-3.5 text-left transition-colors hover:border-accent/40 disabled:opacity-60"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface2 text-accent">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface2 text-accent">
                   <Store size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-body text-sm text-ink">{p.businessName}</p>
-                  {p.description && <p className="truncate font-body text-xs text-muted">{p.description}</p>}
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate font-body text-sm text-ink">{p.businessName}</p>
+                    {p.percent > 0 && <span className="shrink-0 font-mono text-xs text-accent">{p.percent}% off</span>}
+                  </div>
+                  {p.description && (
+                    <p className="mt-0.5 whitespace-pre-line break-words font-body text-xs text-muted">
+                      {p.description}
+                    </p>
+                  )}
                 </div>
-                {p.percent > 0 && <span className="shrink-0 font-mono text-xs text-accent">{p.percent}% off</span>}
-                {applyingCode === p.code && <Loader2 size={14} className="shrink-0 animate-spin text-muted" />}
+                {applyingCode === p.code && <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin text-muted" />}
               </button>
             ))}
           </div>
