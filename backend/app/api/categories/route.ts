@@ -2,16 +2,57 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 
-function serialize(c: { slug: string; name: string; iconName: string; _count: { products: number } }) {
-  return { slug: c.slug, name: c.name, iconName: c.iconName, productCount: c._count.products };
+interface PreviewSource {
+  categorySlug: string;
+  image: string;
+}
+
+function serialize(
+  c: { slug: string; name: string; iconName: string; _count: { products: number } },
+  previewImage?: string
+) {
+  return {
+    slug: c.slug,
+    name: c.name,
+    iconName: c.iconName,
+    productCount: c._count.products,
+    ...(previewImage ? { previewImage } : {}),
+  };
 }
 
 export async function GET() {
-  const categories = await prisma.category.findMany({
-    include: { _count: { select: { products: true } } },
-    orderBy: { name: "asc" },
-  });
-  return NextResponse.json(categories.map(serialize));
+  const [categories, spotlightProducts, recentProducts] = await Promise.all([
+    prisma.category.findMany({
+      include: { _count: { select: { products: true } } },
+      orderBy: { name: "asc" },
+    }),
+    // One product per category, preferring the one the admin has flagged
+    // as isSpotlight (their intentional "best foot forward" pick).
+    // `distinct` + `orderBy: createdAt desc` keeps the most recent
+    // spotlighted product per category if there happens to be more than
+    // one.
+    prisma.product.findMany({
+      where: { isSpotlight: true },
+      orderBy: { createdAt: "desc" },
+      distinct: ["categorySlug"],
+      select: { categorySlug: true, image: true },
+    }),
+    // Fallback for categories with no spotlighted product — most recently
+    // added product in that category, so every category with at least one
+    // product gets a preview image even if the admin never curated one.
+    prisma.product.findMany({
+      orderBy: { createdAt: "desc" },
+      distinct: ["categorySlug"],
+      select: { categorySlug: true, image: true },
+    }),
+  ]);
+
+  const spotlightBySlug = new Map((spotlightProducts as PreviewSource[]).map((p) => [p.categorySlug, p.image]));
+  const recentBySlug = new Map((recentProducts as PreviewSource[]).map((p) => [p.categorySlug, p.image]));
+
+  return NextResponse.json(
+    categories.map((c) => serialize(c, spotlightBySlug.get(c.slug) ?? recentBySlug.get(c.slug)))
+  );
 }
 
 export async function POST(req: NextRequest) {

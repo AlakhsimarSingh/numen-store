@@ -9,6 +9,7 @@ import TestimonialsSection from "@/components/home/TestimonialsSection";
 import { fetchSiteSettingsForServer } from "@/src/lib/site-settings";
 import { fetchProductsServer, fetchCurrentFlashDealServer, fetchTestimonialsServer } from "@/src/lib/serverApi";
 
+
 export default async function Home() {
   const [settings, products, flashDeal, testimonials] = await Promise.all([
     fetchSiteSettingsForServer(),

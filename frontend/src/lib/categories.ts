@@ -3,6 +3,11 @@ export interface Category {
   name: string;
   iconName: string;
   productCount: number;
+  // Representative image for this category — a product shot chosen
+  // server-side (see backend/app/api/categories/route.ts), not admin-set.
+  // Absent for a category with zero products; the mega menu falls back
+  // to an icon tile in that case.
+  previewImage?: string;
 }
 
 export async function fetchCategories(): Promise<Category[]> {

@@ -15,8 +15,12 @@ import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { detectCurrencyFromIP, detectCurrencyFromLocale } from "@/src/lib/currency";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
 
+const ease = [0.16, 1, 0.3, 1] as const;
+
+// "Home" and "Categories" (the mega menu) render first and separately,
+// outside this array, since they're no longer plain text links in the
+// same row — everything else keeps its old relative order after them.
 const navLinks = [
-  { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
   { label: "New Drops", href: "/shop?filter=new" },
   { label: "Shop the Look", href: "/shop-the-look" },
@@ -73,7 +77,7 @@ export default function Navbar() {
       <motion.header
         initial={{ y: -40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        transition={{ duration: 0.6, ease }}
         className={cn(
           "fixed inset-x-0 top-0 z-50 h-20 border-b transition-all duration-500",
           scrolled
@@ -87,12 +91,34 @@ export default function Navbar() {
           </Link>
 
           <nav className="hidden items-center gap-8 md:flex">
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15, duration: 0.5, ease }}
+            >
+              <Link
+                href="/"
+                className="group relative font-body text-sm text-muted transition-colors hover:text-ink"
+              >
+                Home
+                <span className="absolute -bottom-1 left-0 h-px w-0 bg-accent transition-all duration-300 group-hover:w-full" />
+              </Link>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 + 0.08, duration: 0.5, ease }}
+            >
+              <CategoryMegaMenu />
+            </motion.div>
+
             {navLinks.map((link, i) => (
               <motion.div
                 key={link.href}
                 initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 + i * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ delay: 0.15 + (i + 2) * 0.08, duration: 0.5, ease }}
               >
                 <Link
                   href={link.href}
@@ -103,13 +129,6 @@ export default function Navbar() {
                 </Link>
               </motion.div>
             ))}
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 + navLinks.length * 0.08, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <CategoryMegaMenu />
-            </motion.div>
           </nav>
 
           <div className="flex items-center gap-5">
@@ -185,7 +204,7 @@ export default function Navbar() {
             >
               <motion.span
                 animate={open ? { rotate: 45, y: 6.5 } : { rotate: 0, y: 0 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.25, ease }}
                 className="h-[1.5px] w-5 bg-ink/80"
               />
               <motion.span
@@ -195,7 +214,7 @@ export default function Navbar() {
               />
               <motion.span
                 animate={open ? { rotate: -45, y: -6.5 } : { rotate: 0, y: 0 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                transition={{ duration: 0.25, ease }}
                 className="h-[1.5px] w-5 bg-ink/80"
               />
             </button>
