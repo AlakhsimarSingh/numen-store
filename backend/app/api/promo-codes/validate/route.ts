@@ -14,5 +14,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ valid: false });
   }
 
-  return NextResponse.json({ valid: true, code: promo.code, percent: promo.percent });
+  return NextResponse.json({
+    valid: true,
+    code: promo.code,
+    percent: promo.percent,
+    businessName: promo.businessName,
+  });
 }

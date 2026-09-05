@@ -384,9 +384,26 @@ model RecentlyViewed {
 }
 
 model PromoCode {
-  code    String  @id
-  percent Float
-  active  Boolean @default(true)
+  code           String   @id
+  percent        Float
+  active         Boolean  @default(true)
+
+  // Partner/attribution fields — every code now represents a business
+  // partner, not just an anonymous discount. businessName is required at
+  // creation (enforced in the API route, not here, so existing rows
+  // without one don't break the migration).
+  businessName   String   @default("")
+  contactName    String?
+  contactEmail   String?
+  contactPhone   String?
+  description    String?
+  // Codes a business has opted into public discovery — these (and only
+  // these) appear in the customer-facing "connect with a seller" picker
+  // at checkout. Codes handed out directly and privately stay off this
+  // list even while active.
+  publiclyListed Boolean  @default(false)
+
+  createdAt      DateTime @default(now())
 }
 
 model SiteSettings {

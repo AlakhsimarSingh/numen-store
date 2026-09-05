@@ -60,6 +60,29 @@ async function resolveCurrency(requested: string | undefined) {
 }
 
 /**
+ * Resolves a promo/partner code against the DB and throws if it's
+ * missing or invalid. A code is now MANDATORY on every order — it's used
+ * for partner attribution (revenue share reporting), not just discounts,
+ * so a 0%-discount code is perfectly valid and must still be accepted.
+ * `discountPercent > 0` can no longer be used anywhere as a proxy for
+ * "was a code applied".
+ */
+async function resolveRequiredPromo(promoCode: string | undefined) {
+  const normalized = promoCode?.trim().toUpperCase();
+  if (!normalized) {
+    throw new OrderCreationError("A partner or promo code is required to complete checkout.", 400);
+  }
+  const promo = await prisma.promoCode.findUnique({ where: { code: normalized } });
+  if (!promo || !promo.active) {
+    throw new OrderCreationError(
+      "That code is no longer valid — please choose another or connect with a partner.",
+      400
+    );
+  }
+  return { normalized, discountPercent: promo.percent };
+}
+
+/**
  * Validates stock/pricing fresh against the DB and creates the order +
  * decrements stock atomically. Never trusts client-sent prices, totals, or
  * currency rates — only product IDs, quantities, a promo code, and a
@@ -101,6 +124,8 @@ export async function createOrderFromItems(params: {
     throw new OrderCreationError("Invalid payment method.", 400);
   }
 
+  const { normalized: appliedPromoCode, discountPercent } = await resolveRequiredPromo(promoCode);
+
   const productIds = [...new Set(items.map((i) => i.productId))];
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
   const productMap = new Map(products.map((p) => [p.id, p]));
@@ -119,7 +144,8 @@ export async function createOrderFromItems(params: {
 
   // Two independent, fully server-derived subtotals: one in the currency
   // actually charged, one always in INR for cross-currency revenue
-  // aggregation (Order.totalBaseINR). Never derived from each other.
+  // aggregation (Order.totalBaseINR / Order.subtotalBaseINR). Never
+  // derived from each other.
   let subtotalCharged = 0;
   let subtotalBaseINR = 0;
   const resolvedItemPrices = new Map<string, number>(); // productId -> price in charged currency
@@ -139,17 +165,6 @@ export async function createOrderFromItems(params: {
     subtotalCharged += display.price * item.qty;
     subtotalBaseINR += Number(product.price) * item.qty;
   }
-
-  let discountPercent = 0;
-  const normalizedPromo = promoCode?.trim().toUpperCase();
-  if (normalizedPromo) {
-    const promo = await prisma.promoCode.findUnique({ where: { code: normalizedPromo } });
-    if (promo?.active) discountPercent = promo.percent;
-  }
-  // Only record the code on the order if it actually applied a discount —
-  // a typo'd or inactive code shouldn't count toward that code's usage
-  // stats in the admin panel.
-  const appliedPromoCode = discountPercent > 0 ? normalizedPromo : undefined;
 
   const settingsRow = await prisma.siteSettings.findUnique({ where: { id: 1 } });
   const orderSettings = settingsRow
@@ -284,7 +299,9 @@ export async function createOrderFromItems(params: {
  * Returns the computed total (for creating the Razorpay order amount)
  * without persisting anything. Now currency-aware — Razorpay needs the
  * amount expressed in the currency actually being charged, since it
- * charges in whatever currency + smallest-unit amount you hand it.
+ * charges in whatever currency + smallest-unit amount you hand it. Also
+ * enforces the mandatory promo/partner code here, so a Razorpay order
+ * (and therefore a real charge) can't even be initiated without one.
  */
 export async function computeOrderTotal(params: {
   items: OrderItemInput[];
@@ -293,6 +310,8 @@ export async function computeOrderTotal(params: {
   currency?: string;
 }) {
   const { items, paymentMethod, promoCode, currency: requestedCurrency } = params;
+
+  const { discountPercent } = await resolveRequiredPromo(promoCode);
 
   const productIds = [...new Set(items.map((i) => i.productId))];
   const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
@@ -319,13 +338,6 @@ export async function computeOrderTotal(params: {
     );
     return sum + display.price * item.qty;
   }, 0);
-
-  let discountPercent = 0;
-  const normalizedPromo = promoCode?.trim().toUpperCase();
-  if (normalizedPromo) {
-    const promo = await prisma.promoCode.findUnique({ where: { code: normalizedPromo } });
-    if (promo?.active) discountPercent = promo.percent;
-  }
 
   const settingsRow = await prisma.siteSettings.findUnique({ where: { id: 1 } });
   const orderSettings = settingsRow

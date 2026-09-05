@@ -2,8 +2,21 @@ export interface PromoCode {
   code: string;
   percent: number;
   active: boolean;
+  businessName: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  description?: string;
+  publiclyListed: boolean;
   usageCount: number;
   totalSubtotalINR: number;
+}
+
+export interface PartnerListing {
+  code: string;
+  businessName: string;
+  description?: string;
+  percent: number;
 }
 
 export async function fetchPromoCodes(): Promise<PromoCode[]> {
@@ -12,7 +25,26 @@ export async function fetchPromoCodes(): Promise<PromoCode[]> {
   return res.json();
 }
 
-export async function createPromoCode(input: { code: string; percent: number; active?: boolean }): Promise<PromoCode> {
+// Public — powers the customer-facing "connect with a seller" picker at
+// checkout. No credentials needed; only publiclyListed active codes come
+// back (enforced server-side).
+export async function fetchPartners(): Promise<PartnerListing[]> {
+  const res = await fetch("/api/promo-codes/partners", { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to load partners.");
+  return res.json();
+}
+
+export async function createPromoCode(input: {
+  code: string;
+  percent: number;
+  active?: boolean;
+  businessName: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  description?: string;
+  publiclyListed?: boolean;
+}): Promise<PromoCode> {
   const res = await fetch("/api/promo-codes", {
     method: "POST",
     credentials: "include",
@@ -24,7 +56,15 @@ export async function createPromoCode(input: { code: string; percent: number; ac
   return data;
 }
 
-export async function updatePromoCode(code: string, updates: Partial<Pick<PromoCode, "percent" | "active">>): Promise<PromoCode> {
+export async function updatePromoCode(
+  code: string,
+  updates: Partial<
+    Pick<
+      PromoCode,
+      "percent" | "active" | "businessName" | "contactName" | "contactEmail" | "contactPhone" | "description" | "publiclyListed"
+    >
+  >
+): Promise<PromoCode> {
   const res = await fetch(`/api/promo-codes/${code}`, {
     method: "PATCH",
     credentials: "include",

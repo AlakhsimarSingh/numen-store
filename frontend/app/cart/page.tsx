@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Minus, Plus, ShoppingBag, Tag, Trash2, X } from "lucide-react";
+import { Loader2, Minus, Plus, ShoppingBag, Store, Tag, Trash2, X } from "lucide-react";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
@@ -12,6 +12,7 @@ import { computeTotals } from "@/src/lib/order";
 import { getDisplayPrice, formatMoney } from "@/src/lib/currency";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { useShallow } from "zustand/react/shallow";
+import PartnerPicker from "@/components/checkout/PartnerPicker";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -21,6 +22,7 @@ export default function CartPage() {
   const removeItem = useCartStore((s) => s.removeItem);
 
   const promoCode = useCheckoutStore((s) => s.promoCode);
+  const promoBusinessName = useCheckoutStore((s) => s.promoBusinessName);
   const discountPercent = useCheckoutStore((s) => s.discountPercent);
   const applyPromo = useCheckoutStore((s) => s.applyPromo);
   const revalidatePromo = useCheckoutStore((s) => s.revalidatePromo);
@@ -35,6 +37,7 @@ export default function CartPage() {
   const [promoInput, setPromoInput] = useState(promoCode);
   const [promoError, setPromoError] = useState("");
   const [promoApplying, setPromoApplying] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const showToast = useToastStore((s) => s.show);
   const shippingSettings = useSiteSettingsStore(
@@ -46,21 +49,17 @@ export default function CartPage() {
     }))
   );
 
-  // The persisted promo code could be from a session days ago, or from
-  // right before the customer hit "back" out of an earlier checkout
-  // attempt — either way, whether it's still valid is unknown until it's
-  // re-checked against the server. revalidatePromo() (in the checkout
-  // store) already does exactly that: it clears the code if it's expired,
-  // deactivated, or hit its cap, and leaves it alone on a transient
-  // network failure. It just needed to actually be called somewhere —
-  // this is that somewhere. Runs once, on every mount of this page.
+  // A code has been mandatory since checkout was gated on it — but state
+  // persisted from before that rollout, or from days ago, might no longer
+  // be valid (deactivated, expired). Re-check on every mount so a stale
+  // "applied" state can't silently let someone through who shouldn't be.
   useEffect(() => {
     const hadPromo = !!useCheckoutStore.getState().promoCode;
     if (!hadPromo) return;
     revalidatePromo().then(() => {
       const stillHasPromo = !!useCheckoutStore.getState().promoCode;
       if (!stillHasPromo) {
-        showToast("Your promo code was no longer valid and has been removed.", "info");
+        showToast("Your code was no longer valid and has been removed — please add another to continue.", "info");
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,16 +83,12 @@ export default function CartPage() {
   const subtotal = lineDisplays.reduce((sum, { item, display }) => sum + display.price * item.qty, 0);
   const anyEstimated = lineDisplays.some(({ display }) => display.estimated);
 
-  // Shipping is deliberately NOT computed here. calculateShippingCost()
-  // needs a destination pincode to resolve Punjab vs rest-of-India, and
-  // that doesn't exist until the customer fills in the shipping-details
-  // step — so computeTotals() falls back to a flat placeholder fee
-  // whenever totalWeightKg/destinationPincode are omitted. Passing those
-  // in here would either require guessing a zone or showing a number that
-  // has nothing to do with the real charge. Instead we only take
-  // discount/tax from computeTotals and build a shipping-exclusive total
-  // ourselves — the real, final total (shipping included) is computed on
-  // /checkout/payment once weight + destination pincode are both known.
+  // Shipping is deliberately NOT computed here — it needs a destination
+  // pincode, which doesn't exist until the shipping-details step. Only
+  // discount/tax come from computeTotals; the shipping-exclusive total is
+  // built manually below. The real, final total (shipping included) is
+  // computed on /checkout/payment once weight + destination pincode are
+  // both known.
   const { discount, tax } = computeTotals({
     subtotal,
     discountPercent,
@@ -104,6 +99,10 @@ export default function CartPage() {
   });
   const discounted = Math.max(0, subtotal - discount);
   const totalExcludingShipping = Math.round((discounted + tax) * 100) / 100;
+
+  // A code (any code — even 0% discount) is now required to proceed past
+  // this page, since it's how orders get attributed to a partner business.
+  const hasCode = !!promoCode;
 
   async function handleApplyPromo() {
     setPromoApplying(true);
@@ -117,7 +116,7 @@ export default function CartPage() {
     clearPromo();
     setPromoInput("");
     setPromoError("");
-    showToast("Promo code removed", "info");
+    showToast("Code removed", "info");
   }
 
   if (items.length === 0) {
@@ -211,43 +210,58 @@ export default function CartPage() {
         >
           <h2 className="font-display text-lg font-bold text-ink">Order Summary</h2>
 
-          {discountPercent > 0 && !promoError ? (
+          {hasCode ? (
             <div className="mt-4 flex items-center justify-between gap-2 rounded-full border border-accent/30 bg-accent/5 px-4 py-2.5">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
                 <Tag size={14} className="shrink-0 text-accent" />
                 <span className="truncate font-mono text-sm text-ink">{promoCode}</span>
-                <span className="shrink-0 font-mono text-[11px] text-accent">{discountPercent}% off</span>
+                {discountPercent > 0 ? (
+                  <span className="shrink-0 font-mono text-[11px] text-accent">{discountPercent}% off</span>
+                ) : (
+                  promoBusinessName && (
+                    <span className="shrink-0 truncate font-body text-[11px] text-muted">— {promoBusinessName}</span>
+                  )
+                )}
               </div>
               <button
                 type="button"
                 onClick={handleClearPromo}
-                aria-label="Remove promo code"
+                aria-label="Remove code"
                 className="shrink-0 text-muted hover:text-accent2"
               >
                 <X size={15} />
               </button>
             </div>
           ) : (
-            <div className="mt-4 flex items-center gap-2">
-              <div className="flex flex-1 items-center gap-2 rounded-full border border-white/10 bg-bg px-4 py-2.5">
-                <Tag size={14} className="text-muted" />
-                <input
-                  value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value)}
-                  placeholder="Promo code"
-                  disabled={promoRevalidating}
-                  className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none disabled:opacity-60"
-                />
-                {promoRevalidating && <Loader2 size={14} className="shrink-0 animate-spin text-muted" />}
+            <>
+              <div className="mt-4 flex items-center gap-2">
+                <div className="flex flex-1 items-center gap-2 rounded-full border border-white/10 bg-bg px-4 py-2.5">
+                  <Tag size={14} className="text-muted" />
+                  <input
+                    value={promoInput}
+                    onChange={(e) => setPromoInput(e.target.value)}
+                    placeholder="Promo or partner code"
+                    disabled={promoRevalidating}
+                    className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none disabled:opacity-60"
+                  />
+                  {promoRevalidating && <Loader2 size={14} className="shrink-0 animate-spin text-muted" />}
+                </div>
+                <button
+                  onClick={handleApplyPromo}
+                  disabled={promoApplying || promoRevalidating}
+                  className="rounded-full border border-white/10 px-4 py-2.5 font-body text-xs text-ink hover:border-accent/50 hover:text-accent disabled:opacity-60"
+                >
+                  {promoApplying ? "Checking…" : "Apply"}
+                </button>
               </div>
               <button
-                onClick={handleApplyPromo}
-                disabled={promoApplying || promoRevalidating}
-                className="rounded-full border border-white/10 px-4 py-2.5 font-body text-xs text-ink hover:border-accent/50 hover:text-accent disabled:opacity-60"
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                className="mt-2 flex items-center gap-1.5 font-body text-xs text-accent hover:underline"
               >
-                {promoApplying ? "Checking…" : "Apply"}
+                <Store size={12} /> Don&apos;t have a code? Connect with a seller
               </button>
-            </div>
+            </>
           )}
           {promoError && <p className="mt-1.5 font-mono text-[11px] text-accent2">{promoError}</p>}
 
@@ -285,14 +299,31 @@ export default function CartPage() {
             <p className="mt-1 font-mono text-[10px] text-muted">Converted estimate — exact pricing shown at checkout.</p>
           )}
 
-          <Link
-            href="/checkout/shipping"
-            className="mt-5 block rounded-full bg-accent py-3.5 text-center font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01]"
-          >
-            Proceed to Checkout
-          </Link>
+          {hasCode ? (
+            <Link
+              href="/checkout/shipping"
+              className="mt-5 block rounded-full bg-accent py-3.5 text-center font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01]"
+            >
+              Proceed to Checkout
+            </Link>
+          ) : (
+            <div className="mt-5">
+              <button
+                type="button"
+                disabled
+                className="block w-full cursor-not-allowed rounded-full bg-surface2 py-3.5 text-center font-body text-sm font-semibold text-muted"
+              >
+                Proceed to Checkout
+              </button>
+              <p className="mt-2 text-center font-mono text-[10px] text-muted">
+                Add a code or connect with a seller above to continue.
+              </p>
+            </div>
+          )}
         </motion.div>
       </div>
+
+      {pickerOpen && <PartnerPicker onClose={() => setPickerOpen(false)} />}
     </div>
   );
 }

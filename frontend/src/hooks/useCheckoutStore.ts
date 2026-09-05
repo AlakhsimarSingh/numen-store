@@ -68,6 +68,11 @@ interface CheckoutState {
   paymentMethod: PaymentMethodId | null;
   promoCode: string;
   discountPercent: number;
+  // Display name of the partner tied to the current promoCode, e.g. "Acme
+  // Retailers" — set alongside promoCode so checkout steps after Cart can
+  // show "Connected with X" without re-fetching. Empty when no code is
+  // applied, or when a code has no associated business name.
+  promoBusinessName: string;
   promoRevalidating: boolean;
   confirmedTotals: ConfirmedTotals | null;
   lastOrder: OrderSnapshot | null;
@@ -92,6 +97,7 @@ export const useCheckoutStore = create<CheckoutState>()(
       paymentMethod: null,
       promoCode: "",
       discountPercent: 0,
+      promoBusinessName: "",
       promoRevalidating: false,
       confirmedTotals: null,
       lastOrder: null,
@@ -109,7 +115,7 @@ export const useCheckoutStore = create<CheckoutState>()(
           });
           const data = await res.json();
           if (!res.ok || !data.valid) return false;
-          set({ promoCode: data.code, discountPercent: data.percent });
+          set({ promoCode: data.code, discountPercent: data.percent, promoBusinessName: data.businessName ?? "" });
           return true;
         } catch {
           return false;
@@ -133,9 +139,9 @@ export const useCheckoutStore = create<CheckoutState>()(
           });
           const data = await res.json();
           if (!res.ok || !data.valid) {
-            set({ promoCode: "", discountPercent: 0 });
+            set({ promoCode: "", discountPercent: 0, promoBusinessName: "" });
           } else {
-            set({ promoCode: data.code, discountPercent: data.percent });
+            set({ promoCode: data.code, discountPercent: data.percent, promoBusinessName: data.businessName ?? "" });
           }
         } catch {
           // Network hiccup — don't punish the customer for a transient
@@ -150,7 +156,7 @@ export const useCheckoutStore = create<CheckoutState>()(
       // revalidatePromo, this doesn't hit the server at all, since intent
       // here is simply "I don't want this code anymore," not "check if
       // it's still valid."
-      clearPromo: () => set({ promoCode: "", discountPercent: 0 }),
+      clearPromo: () => set({ promoCode: "", discountPercent: 0, promoBusinessName: "" }),
       setConfirmedTotals: (confirmedTotals) => set({ confirmedTotals }),
       placeOrder: (order) => set((state) => ({ lastOrder: order, orders: [order, ...state.orders] })),
       resetCheckout: () =>
@@ -159,6 +165,7 @@ export const useCheckoutStore = create<CheckoutState>()(
           paymentMethod: null,
           promoCode: "",
           discountPercent: 0,
+          promoBusinessName: "",
           confirmedTotals: null,
         }),
       updateOrderStatus: (orderId, status) =>
