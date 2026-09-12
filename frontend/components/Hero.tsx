@@ -3,12 +3,13 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Product } from "@/src/types";
 import ProductStack from "./ProductStack";
 import HeroSupportBadge from "./home/HeroSupportBadge";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+const LOOP_GAP_MS = 1000;
 
 interface HeroProps {
   heroHeadlineLines: string[];
@@ -48,12 +49,7 @@ export default function Hero({
 }: HeroProps) {
   const [, setActiveIndex] = useState(0);
 
-  // Defaults to false (video allowed) so server-rendered markup matches the
-  // first client render — the real check only matters once JS runs, and
-  // flipping to the static image a frame later is harmless, whereas a
-  // mismatch here would trigger a hydration warning.
   const [reducedMotion, setReducedMotion] = useState(false);
-
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -62,6 +58,46 @@ export default function Hero({
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
+
+  // No `loop` attribute on either <video> — instead each is let to end
+  // naturally (it holds on its last frame, paused), then this waits
+  // LOOP_GAP_MS before rewinding and replaying it. That's what produces
+  // the 1s pause between loops; `loop` alone restarts instantly with no
+  // gap and gives no hook to insert one.
+  const desktopVideoRef = useRef<HTMLVideoElement>(null);
+  const mobileVideoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const desktopEl = desktopVideoRef.current;
+    const mobileEl = mobileVideoRef.current;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    function attach(el: HTMLVideoElement | null) {
+      if (!el) return () => {};
+      const onEnded = () => {
+        const t = setTimeout(() => {
+          if (!el) return;
+          el.currentTime = 0;
+          el.play().catch(() => {
+            // Autoplay can be rejected if the tab lost focus/was
+            // backgrounded during the gap — harmless, it simply won't
+            // resume until the next user interaction or visibility change.
+          });
+        }, LOOP_GAP_MS);
+        timers.push(t);
+      };
+      el.addEventListener("ended", onEnded);
+      return () => el.removeEventListener("ended", onEnded);
+    }
+
+    const detachDesktop = attach(desktopEl);
+    const detachMobile = attach(mobileEl);
+    return () => {
+      detachDesktop();
+      detachMobile();
+      timers.forEach(clearTimeout);
+    };
+  }, [heroVideoDesktop, heroVideoMobile]);
 
   // Spotlight Drop is fully admin-controlled: only products explicitly
   // flagged `isSpotlight` in the admin panel show up here. `products` is
@@ -85,20 +121,13 @@ export default function Hero({
           transition={{ duration: 2.2, ease }}
           className="absolute inset-0"
         >
-          {/* Desktop: video if configured and motion isn't reduced,
-              otherwise the static image. Rendered/hidden via the same
-              hidden/md:block pattern already used for ProductStack below,
-              rather than JS breakpoint detection — consistent with the
-              rest of this file. preload="metadata" keeps the
-              CSS-hidden-on-mobile <video> from fully downloading on phones
-              even though it's mounted in the DOM. */}
           <div className="absolute inset-0 hidden md:block">
             {showDesktopVideo ? (
               <video
+                ref={desktopVideoRef}
                 key={heroVideoDesktop}
                 autoPlay
                 muted
-                loop
                 playsInline
                 preload="metadata"
                 poster={heroImage}
@@ -120,14 +149,13 @@ export default function Hero({
             )}
           </div>
 
-          {/* Mobile: same logic, 9:16 source. */}
           <div className="absolute inset-0 md:hidden">
             {showMobileVideo ? (
               <video
+                ref={mobileVideoRef}
                 key={heroVideoMobile}
                 autoPlay
                 muted
-                loop
                 playsInline
                 preload="metadata"
                 poster={heroImage}

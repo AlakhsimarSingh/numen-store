@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Loader2, Plus, Trash2 } from "lucide-react";
 import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { cn } from "@/src/lib/utils";
 import { updateSiteSettings } from "@/src/lib/site-settings";
+import { Check, Loader2, Plus, Trash2, UploadCloud, X } from "lucide-react";
+import { uploadMedia } from "@/src/lib/media";
 
 export default function AdminSettingsPage() {
   const settings = useSiteSettingsStore();
@@ -80,6 +81,23 @@ export default function AdminSettingsPage() {
       showToast(err instanceof Error ? err.message : "Failed to save settings", "error");
     } finally {
       setSaving(false);
+    }
+  }
+  const [uploadingDesktopVideo, setUploadingDesktopVideo] = useState(false);
+  const [uploadingMobileVideo, setUploadingMobileVideo] = useState(false);
+
+  async function handleVideoUpload(slot: "heroVideoDesktop" | "heroVideoMobile", file: File | undefined) {
+    if (!file) return;
+    const setUploading = slot === "heroVideoDesktop" ? setUploadingDesktopVideo : setUploadingMobileVideo;
+    setUploading(true);
+    try {
+      const { url } = await uploadMedia(file);
+      setForm((f) => ({ ...f, [slot]: url }));
+      showToast("Video uploaded");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Upload failed", "error");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -204,20 +222,84 @@ export default function AdminSettingsPage() {
             />
           </div>
           <div className="mt-4">
-            <label className="mb-1.5 block font-body text-xs text-muted">
-              Background video — mobile (9:16, optional)
-            </label>
-            <input
-              value={form.heroVideoMobile}
-              onChange={(e) => setForm({ ...form, heroVideoMobile: e.target.value })}
-              placeholder="https://…mp4"
-              className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
-            />
-            <p className="mt-1 font-body text-[11px] text-muted">
-              Leave either blank to fall back to the background image on that breakpoint. The image above is always
-              used as the video poster and the fallback for reduced-motion visitors.
-            </p>
-          </div>
+  <label className="mb-1.5 block font-body text-xs text-muted">
+    Background video — desktop (16:9, optional)
+  </label>
+  <div className="flex items-center gap-2">
+    <input
+      value={form.heroVideoDesktop}
+      onChange={(e) => setForm({ ...form, heroVideoDesktop: e.target.value })}
+      placeholder="Upload below, or paste a hosted video URL"
+      className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+    />
+    {form.heroVideoDesktop && (
+      <button
+        type="button"
+        onClick={() => setForm({ ...form, heroVideoDesktop: "" })}
+        aria-label="Clear"
+        className="shrink-0 text-muted hover:text-accent2"
+      >
+        <X size={16} />
+      </button>
+    )}
+  </div>
+  <label className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-bg px-3 py-2 font-body text-xs text-muted hover:text-accent">
+    {uploadingDesktopVideo ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+    Upload video file
+    <input
+      type="file"
+      accept="video/*"
+      className="hidden"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        e.target.value = "";
+        handleVideoUpload("heroVideoDesktop", file);
+      }}
+    />
+  </label>
+</div>
+
+  <div className="mt-4">
+    <label className="mb-1.5 block font-body text-xs text-muted">
+      Background video — mobile (9:16, optional)
+    </label>
+    <div className="flex items-center gap-2">
+      <input
+        value={form.heroVideoMobile}
+        onChange={(e) => setForm({ ...form, heroVideoMobile: e.target.value })}
+        placeholder="Upload below, or paste a hosted video URL"
+        className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+      />
+      {form.heroVideoMobile && (
+        <button
+          type="button"
+          onClick={() => setForm({ ...form, heroVideoMobile: "" })}
+          aria-label="Clear"
+          className="shrink-0 text-muted hover:text-accent2"
+        >
+          <X size={16} />
+        </button>
+      )}
+    </div>
+    <label className="mt-2 flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-white/10 bg-bg px-3 py-2 font-body text-xs text-muted hover:text-accent">
+      {uploadingMobileVideo ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+      Upload video file
+      <input
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          handleVideoUpload("heroVideoMobile", file);
+        }}
+      />
+    </label>
+    <p className="mt-2 font-body text-[11px] text-muted">
+      Leave either blank to fall back to the background image on that breakpoint. Remember to hit "Save
+      Settings" below after uploading — the file is stored immediately, but the setting isn't applied until saved.
+    </p>
+  </div>
         </div>
 
         <div className="rounded-2xl border border-white/5 bg-surface p-6">
