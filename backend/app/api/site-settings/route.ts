@@ -10,6 +10,8 @@ function serialize(s: SiteSettings) {
     heroHeadlineLines: s.heroHeadlineLines,
     heroSubtext: s.heroSubtext,
     heroImage: s.heroImage,
+    heroVideoDesktop: s.heroVideoDesktop,
+    heroVideoMobile: s.heroVideoMobile,
     freeShippingThreshold: Number(s.freeShippingThreshold),
     shippingFee: Number(s.shippingFee),
     taxRate: s.taxRate,
@@ -17,6 +19,8 @@ function serialize(s: SiteSettings) {
     announcementEnabled: s.announcementEnabled,
     announcementText: s.announcementText,
     maintenanceMode: s.maintenanceMode,
+    customerCareNumber: s.customerCareNumber,
+    customerCareWhatsapp: s.customerCareWhatsapp,
   };
 }
 
@@ -45,6 +49,8 @@ export async function PATCH(req: NextRequest) {
       heroHeadlineLines: body.heroHeadlineLines,
       heroSubtext: body.heroSubtext,
       heroImage: body.heroImage,
+      heroVideoDesktop: body.heroVideoDesktop,
+      heroVideoMobile: body.heroVideoMobile,
       freeShippingThreshold: body.freeShippingThreshold,
       shippingFee: body.shippingFee,
       taxRate: body.taxRate,
@@ -52,6 +58,8 @@ export async function PATCH(req: NextRequest) {
       announcementEnabled: body.announcementEnabled,
       announcementText: body.announcementText,
       maintenanceMode: body.maintenanceMode,
+      customerCareNumber: body.customerCareNumber,
+      customerCareWhatsapp: body.customerCareWhatsapp,
     },
   });
   return NextResponse.json(serialize(updated));

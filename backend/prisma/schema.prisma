@@ -412,7 +412,9 @@ model SiteSettings {
   tagline                String  @default("Wear the Drop")
   heroHeadlineLines      String[] @default(["WEAR", "THE", "DROP."])
   heroSubtext            String  @default("")
-  heroImage              String  @default("/hero-bg.jpeg")
+  heroImage              String  @default("/hero-bgb.jpg") // also used as the <video> poster + full fallback for reduced-motion/failed loads
+  heroVideoDesktop       String  @default("") // 16:9, e.g. 1920x1080 — blank hides video and just shows heroImage
+  heroVideoMobile        String  @default("") // 9:16, e.g. 1080x1920 — blank falls back to heroImage on mobile even if desktop has video
   freeShippingThreshold  Decimal @db.Decimal(10, 2) @default(75)
   shippingFee            Decimal @db.Decimal(10, 2) @default(6.99)
   taxRate                Float   @default(0.08)
@@ -420,6 +422,8 @@ model SiteSettings {
   announcementEnabled    Boolean @default(false)
   announcementText       String  @default("")
   maintenanceMode        Boolean @default(false)
+  customerCareNumber     String  @default("")
+  customerCareWhatsapp   String  @default("")
 }
 
 model CurrencyRate {

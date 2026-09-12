@@ -4,6 +4,8 @@ export interface SiteSettingsDTO {
   heroHeadlineLines: string[];
   heroSubtext: string;
   heroImage: string;
+  heroVideoDesktop: string;
+  heroVideoMobile: string;
   freeShippingThreshold: number;
   shippingFee: number;
   taxRate: number;
@@ -11,6 +13,8 @@ export interface SiteSettingsDTO {
   announcementEnabled: boolean;
   announcementText: string;
   maintenanceMode: boolean;
+  customerCareNumber: string;
+  customerCareWhatsapp: string;
 }
 
 const DEFAULT_SETTINGS: SiteSettingsDTO = {
@@ -18,7 +22,9 @@ const DEFAULT_SETTINGS: SiteSettingsDTO = {
   tagline: "Wear the Drop",
   heroHeadlineLines: ["WEAR", "THE", "DROP."],
   heroSubtext: "26 categories. Zero filler. Premium fits at prices that don't punish you for having taste.",
-  heroImage: "/hero-bg.jpeg",
+  heroImage: "/hero-bgb.jpg",
+  heroVideoDesktop: "",
+  heroVideoMobile: "",
   freeShippingThreshold: 75,
   shippingFee: 6.99,
   taxRate: 0.08,
@@ -26,6 +32,8 @@ const DEFAULT_SETTINGS: SiteSettingsDTO = {
   announcementEnabled: false,
   announcementText: "",
   maintenanceMode: false,
+  customerCareNumber: "",
+  customerCareWhatsapp: "",
 };
 
 export async function fetchSiteSettings(): Promise<SiteSettingsDTO> {

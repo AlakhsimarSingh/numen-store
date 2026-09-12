@@ -8,6 +8,8 @@ interface SiteSettingsState {
   heroHeadlineLines: string[];
   heroSubtext: string;
   heroImage: string;
+  heroVideoDesktop: string;
+  heroVideoMobile: string;
   freeShippingThreshold: number;
   shippingFee: number;
   taxRate: number;
@@ -15,6 +17,8 @@ interface SiteSettingsState {
   announcementEnabled: boolean;
   announcementText: string;
   maintenanceMode: boolean;
+  customerCareNumber: string;
+  customerCareWhatsapp: string;
   update: (updates: Partial<Omit<SiteSettingsState, "update" | "fetchFromServer">>) => void;
   fetchFromServer: () => Promise<void>;
 }
@@ -26,7 +30,9 @@ export const useSiteSettingsStore = create<SiteSettingsState>()(
       tagline: "Wear the Drop",
       heroHeadlineLines: ["WEAR", "THE", "DROP."],
       heroSubtext: "26 categories. Zero filler. Premium fits at prices that don't punish you for having taste.",
-      heroImage: "/hero-bg.jpeg",
+      heroImage: "/hero-bgb.jpg",
+      heroVideoDesktop: "",
+      heroVideoMobile: "",
       freeShippingThreshold: 75,
       shippingFee: 6.99,
       taxRate: 0.08,
@@ -34,6 +40,8 @@ export const useSiteSettingsStore = create<SiteSettingsState>()(
       announcementEnabled: false,
       announcementText: "Free shipping on orders over ₹75 — today only.",
       maintenanceMode: false,
+      customerCareNumber: "",
+      customerCareWhatsapp: "",
       update: (updates) => set(updates),
       fetchFromServer: async () => {
         try {

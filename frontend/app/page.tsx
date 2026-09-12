@@ -9,7 +9,6 @@ import TestimonialsSection from "@/components/home/TestimonialsSection";
 import { fetchSiteSettingsForServer } from "@/src/lib/site-settings";
 import { fetchProductsServer, fetchCurrentFlashDealServer, fetchTestimonialsServer } from "@/src/lib/serverApi";
 
-
 export default async function Home() {
   const [settings, products, flashDeal, testimonials] = await Promise.all([
     fetchSiteSettingsForServer(),
@@ -24,7 +23,11 @@ export default async function Home() {
         heroHeadlineLines={settings.heroHeadlineLines}
         heroSubtext={settings.heroSubtext}
         heroImage={settings.heroImage}
+        heroVideoDesktop={settings.heroVideoDesktop}
+        heroVideoMobile={settings.heroVideoMobile}
         products={products}
+        customerCareNumber={settings.customerCareNumber}
+        customerCareWhatsapp={settings.customerCareWhatsapp}
       />
       <CategoryTicker />
       {flashDeal && <FlashDealSection deal={flashDeal} />}

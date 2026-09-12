@@ -37,6 +37,8 @@ export default function AdminSettingsPage() {
     heroLine3: settings.heroHeadlineLines[2],
     heroSubtext: settings.heroSubtext,
     heroImage: settings.heroImage,
+    heroVideoDesktop: settings.heroVideoDesktop,
+    heroVideoMobile: settings.heroVideoMobile,
     freeShippingThreshold: String(settings.freeShippingThreshold),
     shippingFee: String(settings.shippingFee),
     taxRate: String(settings.taxRate * 100),
@@ -44,6 +46,8 @@ export default function AdminSettingsPage() {
     announcementEnabled: settings.announcementEnabled,
     announcementText: settings.announcementText,
     maintenanceMode: settings.maintenanceMode,
+    customerCareNumber: settings.customerCareNumber,
+    customerCareWhatsapp: settings.customerCareWhatsapp,
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -57,6 +61,8 @@ export default function AdminSettingsPage() {
         heroHeadlineLines: [form.heroLine1, form.heroLine2, form.heroLine3],
         heroSubtext: form.heroSubtext,
         heroImage: form.heroImage,
+        heroVideoDesktop: form.heroVideoDesktop.trim(),
+          heroVideoMobile: form.heroVideoMobile.trim(),
         freeShippingThreshold: parseFloat(form.freeShippingThreshold) || 0,
         shippingFee: parseFloat(form.shippingFee) || 0,
         taxRate: (parseFloat(form.taxRate) || 0) / 100,
@@ -64,6 +70,8 @@ export default function AdminSettingsPage() {
         announcementEnabled: form.announcementEnabled,
         announcementText: form.announcementText,
         maintenanceMode: form.maintenanceMode,
+        customerCareNumber: form.customerCareNumber.trim(),
+        customerCareWhatsapp: form.customerCareWhatsapp.trim(),
       });
       settings.update(updated); // sync local store with the server's canonical values
       setSaved(true);
@@ -183,6 +191,60 @@ export default function AdminSettingsPage() {
             <label className="mb-1.5 block font-body text-xs text-muted">Background image URL</label>
             <input value={form.heroImage} onChange={(e) => setForm({ ...form, heroImage: e.target.value })}
               className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink focus:outline-none focus:border-accent/50" />
+          </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block font-body text-xs text-muted">
+              Background video — desktop (16:9, optional)
+            </label>
+            <input
+              value={form.heroVideoDesktop}
+              onChange={(e) => setForm({ ...form, heroVideoDesktop: e.target.value })}
+              placeholder="https://…mp4"
+              className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+            />
+          </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block font-body text-xs text-muted">
+              Background video — mobile (9:16, optional)
+            </label>
+            <input
+              value={form.heroVideoMobile}
+              onChange={(e) => setForm({ ...form, heroVideoMobile: e.target.value })}
+              placeholder="https://…mp4"
+              className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+            />
+            <p className="mt-1 font-body text-[11px] text-muted">
+              Leave either blank to fall back to the background image on that breakpoint. The image above is always
+              used as the video poster and the fallback for reduced-motion visitors.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/5 bg-surface p-6">
+          <h2 className="font-display text-base font-bold text-ink">Customer care</h2>
+          <p className="mt-1 font-body text-xs text-muted">
+            Powers the &ldquo;real people, ready to help&rdquo; band on the homepage. Leave a field blank to hide its
+            button there — leave both blank to hide the band entirely.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block font-body text-xs text-muted">Phone number (tap-to-call)</label>
+              <input
+                value={form.customerCareNumber}
+                onChange={(e) => setForm({ ...form, customerCareNumber: e.target.value })}
+                placeholder="+91 98765 43210"
+                className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block font-body text-xs text-muted">WhatsApp number</label>
+              <input
+                value={form.customerCareWhatsapp}
+                onChange={(e) => setForm({ ...form, customerCareWhatsapp: e.target.value })}
+                placeholder="919876543210 (country code, no + or spaces)"
+                className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+              />
+            </div>
           </div>
         </div>
 

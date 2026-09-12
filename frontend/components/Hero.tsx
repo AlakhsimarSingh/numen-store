@@ -3,9 +3,10 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Product } from "@/src/types";
 import ProductStack from "./ProductStack";
+import HeroSupportBadge from "./home/HeroSupportBadge";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -13,7 +14,11 @@ interface HeroProps {
   heroHeadlineLines: string[];
   heroSubtext: string;
   heroImage: string;
+  heroVideoDesktop?: string;
+  heroVideoMobile?: string;
   products: Product[];
+  customerCareNumber?: string;
+  customerCareWhatsapp?: string;
 }
 
 /**
@@ -31,8 +36,32 @@ function getHeadlineLineStyle(line: string): CSSProperties {
   return { fontSize: "clamp(2.75rem, 3.5vw + 1.75rem, 6.25rem)" };
 }
 
-export default function Hero({ heroHeadlineLines, heroSubtext, heroImage, products }: HeroProps) {
+export default function Hero({
+  heroHeadlineLines,
+  heroSubtext,
+  heroImage,
+  heroVideoDesktop,
+  heroVideoMobile,
+  products,
+  customerCareNumber,
+  customerCareWhatsapp,
+}: HeroProps) {
   const [, setActiveIndex] = useState(0);
+
+  // Defaults to false (video allowed) so server-rendered markup matches the
+  // first client render — the real check only matters once JS runs, and
+  // flipping to the static image a frame later is harmless, whereas a
+  // mismatch here would trigger a hydration warning.
+  const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   // Spotlight Drop is fully admin-controlled: only products explicitly
   // flagged `isSpotlight` in the admin panel show up here. `products` is
@@ -44,6 +73,9 @@ export default function Hero({ heroHeadlineLines, heroSubtext, heroImage, produc
   const spotlightCount = spotlightList.length;
   const spotlightLabel = `Spotlight Drop — 01 / ${String(spotlightCount).padStart(2, "0")}`;
 
+  const showDesktopVideo = !reducedMotion && !!heroVideoDesktop;
+  const showMobileVideo = !reducedMotion && !!heroVideoMobile;
+
   return (
     <section className="relative -mt-20 overflow-hidden">
       <div className="absolute inset-0 -z-10">
@@ -53,15 +85,69 @@ export default function Hero({ heroHeadlineLines, heroSubtext, heroImage, produc
           transition={{ duration: 2.2, ease }}
           className="absolute inset-0"
         >
-          <Image
-            src={heroImage}
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover"
-            style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
-          />
+          {/* Desktop: video if configured and motion isn't reduced,
+              otherwise the static image. Rendered/hidden via the same
+              hidden/md:block pattern already used for ProductStack below,
+              rather than JS breakpoint detection — consistent with the
+              rest of this file. preload="metadata" keeps the
+              CSS-hidden-on-mobile <video> from fully downloading on phones
+              even though it's mounted in the DOM. */}
+          <div className="absolute inset-0 hidden md:block">
+            {showDesktopVideo ? (
+              <video
+                key={heroVideoDesktop}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                poster={heroImage}
+                className="h-full w-full object-cover"
+                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
+              >
+                <source src={heroVideoDesktop} type="video/mp4" />
+              </video>
+            ) : (
+              <Image
+                src={heroImage}
+                alt=""
+                fill
+                priority
+                sizes="100vw"
+                className="object-cover"
+                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
+              />
+            )}
+          </div>
+
+          {/* Mobile: same logic, 9:16 source. */}
+          <div className="absolute inset-0 md:hidden">
+            {showMobileVideo ? (
+              <video
+                key={heroVideoMobile}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                poster={heroImage}
+                className="h-full w-full object-cover"
+                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
+              >
+                <source src={heroVideoMobile} type="video/mp4" />
+              </video>
+            ) : (
+              <Image
+                src={heroImage}
+                alt=""
+                fill
+                priority
+                sizes="100vw"
+                className="object-cover"
+                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
+              />
+            )}
+          </div>
         </motion.div>
 
         <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/70 to-bg/20 md:via-bg/50 md:to-transparent" />
@@ -79,11 +165,10 @@ export default function Hero({ heroHeadlineLines, heroSubtext, heroImage, produc
         </svg>
       </div>
 
+      <HeroSupportBadge phone={customerCareNumber} whatsapp={customerCareWhatsapp} />
+
       <div className="mx-auto flex max-w-7xl flex-col items-start gap-9 px-6 pb-14 pt-28 sm:gap-11 md:grid md:grid-cols-2 md:items-center md:gap-10 md:pb-28 md:pt-36">
         <div className="relative flex w-full flex-col items-start text-left">
-          {/* Mobile-only vertical spine label — asymmetric counterweight to the
-              left-aligned text block on narrow viewports. Hidden from md up,
-              where the corner tag on ProductStack takes over instead. */}
           {spotlightCount > 0 && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -162,8 +247,6 @@ export default function Hero({ heroHeadlineLines, heroSubtext, heroImage, produc
         >
           <ProductStack products={spotlightList} onChangeIndex={setActiveIndex} />
 
-          {/* Desktop-only diagonal stamp — evokes a contact-sheet frame
-              number, deliberately raw/off-grid rather than a clean UI chip. */}
           {spotlightCount > 0 && (
             <motion.div
               initial={{ opacity: 0, rotate: -8, scale: 0.9 }}
@@ -180,9 +263,6 @@ export default function Hero({ heroHeadlineLines, heroSubtext, heroImage, produc
           )}
         </motion.div>
 
-        {/* Mobile version of ProductStack — same component, rendered
-            outside the "hidden md:block" wrapper above so the corner tag
-            (desktop-only) never appears here. */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
