@@ -16,7 +16,7 @@ const links = [
   { label: "Shop the Look", href: "/shop-the-look" },
   { label: "Categories", href: "/categories" },
   { label: "About", href: "/about" },
-  { label: "Contact Us", href: "/contact" },
+  { label: "Customer Care", href: "/contact" },
 ];
 
 export default function MobileNavOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {

@@ -13,7 +13,7 @@ const ease = [0.16, 1, 0.3, 1] as const;
 const helpLinks = [
   { label: "Track Order", href: "/account/orders" },
   { label: "FAQs", href: "/faq" },
-  { label: "Contact Us", href: "/contact" },
+  { label: "Customer Care", href: "/contact" },
 ];
 
 function InstagramMark() {

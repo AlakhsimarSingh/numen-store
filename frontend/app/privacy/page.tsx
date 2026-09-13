@@ -97,7 +97,7 @@ export default function PrivacyPage() {
           <p>
             The Services aren&apos;t intended for children, and we don&apos;t knowingly collect personal
             information from children under the age of majority in their jurisdiction. If you&apos;re a parent or
-            guardian and believe your child has provided us with personal information, contact us using the details
+            guardian and believe your child has provided us with personal information, reach Customer Care using the details
             below and we&apos;ll delete it.
           </p>
         </section>
@@ -123,7 +123,7 @@ export default function PrivacyPage() {
             <li>Opt out of marketing communications at any time via the unsubscribe link in our emails.</li>
           </ul>
           <p className="mt-3">
-            You can exercise most of these directly from your Account settings, or by contacting us using the
+            You can exercise most of these directly from your Account settings, or by reaching Customer Care using the
             details below. We may need to verify your identity before acting on a request.
           </p>
         </section>
@@ -131,7 +131,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-2 font-display text-lg font-semibold text-ink">9. Complaints</h2>
           <p>
-            If you have concerns about how we handle your personal information, contact us using the details below.
+            If you have concerns about how we handle your personal information,  using the details below.
             Depending on where you live, you may also have the right to lodge a complaint with your local data
             protection authority.
           </p>

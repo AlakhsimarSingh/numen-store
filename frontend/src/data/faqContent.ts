@@ -32,7 +32,7 @@ export const faqCategories: FaqCategory[] = [
       {
         question: "Can I cancel or change my order after placing it?",
         answer:
-          "If your order hasn't shipped yet, contact us right away through the Contact Us page and we'll do our best to update or cancel it. Once it's out for delivery, a return after arrival is the way to go instead.",
+          "If your order hasn't shipped yet, reach Customer Care right away through the Customer Care page and we'll do our best to update or cancel it. Once it's out for delivery, a return after arrival is the way to go instead.",
       },
       {
         question: "Do you ship internationally?",
@@ -42,7 +42,7 @@ export const faqCategories: FaqCategory[] = [
       {
         question: "What if my order arrives damaged or incomplete?",
         answer:
-          "Contact us within 48 hours of delivery with a photo of the item and packaging, and we'll sort out a replacement or refund — no return shipping cost to you in that case.",
+          "Reach Customer Care within 48 hours of delivery with a photo of the item and packaging, and we'll sort out a replacement or refund — no return shipping cost to you in that case.",
       },
     ],
   },
@@ -146,7 +146,7 @@ export const faqCategories: FaqCategory[] = [
       {
         question: "Is NUMEN a genuine, trustworthy website?",
         answer:
-          "Yes. We're a real, operating store with verified customer support, secure payment processing through Razorpay, and a transparent 30-day return policy. You can reach our team anytime through the Contact Us page for any concern before or after ordering.",
+          "Yes. We're a real, operating store with verified customer support, secure payment processing through Razorpay, and a transparent 30-day return policy. You can reach Customer Care anytime through the Customer Care page for any concern before or after ordering.",
       },
       {
         question: "Are your prices affordable, or is this a premium/luxury brand?",
@@ -182,7 +182,7 @@ export const faqCategories: FaqCategory[] = [
       {
         question: "How do I delete my account or data?",
         answer:
-          "Contact our support team through the Contact Us page with an account deletion request, and we'll process it and confirm once complete.",
+          "Reach Customer Care through the Customer Care page with an account deletion request, and we'll process it and confirm once complete.",
       },
     ],
   },

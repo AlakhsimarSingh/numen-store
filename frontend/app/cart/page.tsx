@@ -259,7 +259,7 @@ export default function CartPage() {
                 onClick={() => setPickerOpen(true)}
                 className="mt-2 flex items-center gap-1.5 font-body text-xs text-accent hover:underline"
               >
-                <Store size={12} /> Don&apos;t have a code? Connect with a seller
+                {/* <Store size={12} /> Don&apos;t have a code? Connect with a seller */}
               </button>
             </>
           )}

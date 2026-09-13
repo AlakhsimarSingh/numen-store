@@ -80,7 +80,7 @@ export default function EchoWidget() {
       } else {
         addMessage(
           "assistant",
-          "Sorry, I'm having trouble connecting right now — try again in a moment, or reach the team via Contact Us."
+          "Sorry, I'm having trouble connecting right now — try again in a moment, or reach Customer Care."
         );
       }
     }
@@ -212,7 +212,7 @@ export default function EchoWidget() {
 
             <div className="border-t border-white/5 px-4 py-2 text-center">
               <Link href="/contact" className="font-mono text-[10px] text-muted hover:text-accent">
-                Prefer a human? Contact the team →
+                Prefer a human? Reach Customer Care →
               </Link>
             </div>
           </motion.div>

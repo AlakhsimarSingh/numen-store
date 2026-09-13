@@ -76,7 +76,7 @@ export default function AdminContactPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">Contact Inbox</h1>
+          <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">Customer Care Inbox</h1>
           <p className="mt-1 font-body text-sm text-muted">
             {messages.length} message{messages.length !== 1 ? "s" : ""}{openCount > 0 && ` · ${openCount} open`}
           </p>

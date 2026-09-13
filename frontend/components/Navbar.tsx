@@ -25,7 +25,7 @@ const navLinks = [
   { label: "New Drops", href: "/shop?filter=new" },
   { label: "Shop the Look", href: "/shop-the-look" },
   { label: "About", href: "/about" },
-  { label: "Contact Us", href: "/contact" },
+  { label: "Customer Care", href: "/contact" },
 ];
 
 export default function Navbar() {

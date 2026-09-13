@@ -57,7 +57,7 @@ export default function ContactPage() {
         className="mb-10 text-center"
       >
         <p className="font-mono text-xs uppercase tracking-widest text-accent">Get in touch</p>
-        <h1 className="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">Contact Us</h1>
+        <h1 className="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">Customer Care</h1>
         <p className="mx-auto mt-2 max-w-md font-body text-sm text-muted">
           Questions about an order, a fit, or anything else — we usually reply within a day.
         </p>
