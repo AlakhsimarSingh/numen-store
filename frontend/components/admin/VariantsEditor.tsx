@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { Crop, Loader2, Plus, Trash2, UploadCloud, X } from "lucide-react";
+import { ArrowDown, ArrowRight, Crop, Loader2, Plus, Trash2, UploadCloud, X } from "lucide-react";
 import { ColorOption, VariantStockEntry } from "@/src/types";
 import { uploadMedia } from "@/src/lib/media";
+import { cn } from "@/src/lib/utils";
 import ImageCropModal from "@/components/admin/ImageCropModal";
 
 interface Props {
@@ -14,6 +15,20 @@ interface Props {
   onChange: (data: { colors: ColorOption[]; sizes: string[]; variantStock: VariantStockEntry[] }) => void;
   onMediaUploaded?: (url: string, path: string) => void;
 }
+
+const APPAREL_SIZE_PRESETS = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
+
+// Common numeric size ranges people reach for a lot (shoe sizing systems).
+// These just pre-fill the generic From/To range generator below — they're
+// shortcuts, not a separate code path, so any other range (e.g. 40 to 45,
+// 41 to 45, 28 to 38…) works the exact same way by typing it in directly.
+const NUMERIC_RANGE_SHORTCUTS = [
+  { label: "EU 36–46", from: 36, to: 46 },
+  { label: "UK 3–11", from: 3, to: 11 },
+  { label: "US 5–13", from: 5, to: 13 },
+];
+
+const MAX_RANGE_SPAN = 100; // safety guard against fat-fingering a huge range
 
 function rebuildMatrix(colors: ColorOption[], sizes: string[], existing: VariantStockEntry[]): VariantStockEntry[] {
   const colorNames = colors.length > 0 ? colors.map((c) => c.name) : ["Default"];
@@ -35,10 +50,181 @@ type CropJob = {
   replaceIndex: number | null; // null = append new image; number = recrop existing at that index
 };
 
+// Fast size input: tap a preset chip, or type sizes separated by a space,
+// comma, or newline — each separator instantly turns the typed text into a
+// removable chip. Also accepts pasted comma/space separated lists in one go.
+function SizesEditor({ sizes, onChange }: { sizes: string[]; onChange: (next: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+
+  function addMany(raw: string) {
+    const parts = raw
+      .split(/[,\s]+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    const next = [...sizes];
+    for (const p of parts) {
+      if (!next.some((s) => s.toLowerCase() === p.toLowerCase())) next.push(p);
+    }
+    onChange(next);
+  }
+
+  function removeSize(size: string) {
+    onChange(sizes.filter((s) => s !== size));
+  }
+
+  // Generalized: works for 40→45, 41→45, 6→13, or any other numeric span —
+  // counts up (or down, if entered backwards) and adds every whole number
+  // in between as its own chip in one tap.
+  function addRange(fromRaw: number | string, toRaw: number | string) {
+    const from = typeof fromRaw === "number" ? fromRaw : parseInt(fromRaw, 10);
+    const to = typeof toRaw === "number" ? toRaw : parseInt(toRaw, 10);
+    if (Number.isNaN(from) || Number.isNaN(to)) return;
+    const start = Math.min(from, to);
+    const end = Math.max(from, to);
+    if (end - start > MAX_RANGE_SPAN) return;
+    const generated: string[] = [];
+    for (let n = start; n <= end; n++) generated.push(String(n));
+    addMany(generated.join(" "));
+  }
+
+  function handleAddRangeClick() {
+    if (!rangeFrom || !rangeTo) return;
+    addRange(rangeFrom, rangeTo);
+    setRangeFrom("");
+    setRangeTo("");
+  }
+
+  function togglePreset(size: string) {
+    if (sizes.some((s) => s.toLowerCase() === size.toLowerCase())) removeSize(size);
+    else onChange([...sizes, size]);
+  }
+
+  function commitDraft() {
+    if (draft.trim()) {
+      addMany(draft);
+      setDraft("");
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === "," || e.key === " ") {
+      e.preventDefault();
+      commitDraft();
+    } else if (e.key === "Backspace" && draft === "" && sizes.length > 0) {
+      removeSize(sizes[sizes.length - 1]);
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text");
+    if (/[,\s]/.test(pasted)) {
+      e.preventDefault();
+      addMany(pasted);
+    }
+  }
+
+  return (
+    <div>
+      <label className="mb-1.5 block font-body text-xs text-muted">Sizes (optional)</label>
+
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {APPAREL_SIZE_PRESETS.map((s) => {
+          const active = sizes.some((sz) => sz.toLowerCase() === s.toLowerCase());
+          return (
+            <button
+              key={s}
+              type="button"
+              onClick={() => togglePreset(s)}
+              className={cn(
+                "rounded-full border px-3 py-1 font-mono text-[11px] transition-colors",
+                active ? "border-accent bg-accent/10 text-accent" : "border-white/10 text-muted hover:text-ink"
+              )}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <span className="font-body text-[10px] text-muted">Numeric range:</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={rangeFrom}
+          onChange={(e) => setRangeFrom(e.target.value)}
+          placeholder="40"
+          className="w-14 rounded-lg border border-white/10 bg-bg px-2 py-1 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+        />
+        <span className="font-body text-[10px] text-muted">to</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={rangeTo}
+          onChange={(e) => setRangeTo(e.target.value)}
+          placeholder="45"
+          className="w-14 rounded-lg border border-white/10 bg-bg px-2 py-1 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+        />
+        <button
+          type="button"
+          onClick={handleAddRangeClick}
+          disabled={!rangeFrom || !rangeTo}
+          className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 font-body text-[11px] font-semibold text-accent hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Add range
+        </button>
+      </div>
+
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {NUMERIC_RANGE_SHORTCUTS.map((r) => (
+          <button
+            key={r.label}
+            type="button"
+            onClick={() => addRange(r.from, r.to)}
+            className="rounded-full border border-white/10 px-2.5 py-1 font-mono text-[10px] text-muted hover:border-accent/40 hover:text-accent"
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-bg px-2.5 py-2 focus-within:border-accent/50">
+        {sizes.map((s) => (
+          <span
+            key={s}
+            className="flex items-center gap-1 rounded-full bg-surface2 px-2.5 py-1 font-mono text-[11px] text-ink"
+          >
+            {s}
+            <button type="button" onClick={() => removeSize(s)} className="text-muted hover:text-accent2" aria-label={`Remove ${s}`}>
+              <X size={10} />
+            </button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={commitDraft}
+          onPaste={handlePaste}
+          placeholder={sizes.length === 0 ? "Type a size, hit space…" : "Add another…"}
+          className="min-w-[90px] flex-1 bg-transparent font-body text-xs text-ink placeholder:text-muted focus:outline-none"
+        />
+      </div>
+      <p className="mt-1 font-body text-[10px] text-muted">
+        Tap a preset, use the numeric range for things like shoe sizes, or type sizes separated by a space — each becomes a chip instantly. No commas needed.
+      </p>
+    </div>
+  );
+}
+
 export default function VariantsEditor({ colors, sizes, variantStock, onChange, onMediaUploaded }: Props) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [uploadingVideoIndex, setUploadingVideoIndex] = useState<number | null>(null);
+  const [bulkStockValue, setBulkStockValue] = useState("10");
 
   const [cropQueue, setCropQueue] = useState<CropJob[]>([]);
   const [activeCrop, setActiveCrop] = useState<CropJob | null>(null);
@@ -61,6 +247,14 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
       colors,
       sizes,
       variantStock: variantStock.map((v) => (v.color === color && v.size === size ? { ...v, stock } : v)),
+    });
+  }
+  function applyBulkStock(predicate: (v: VariantStockEntry) => boolean) {
+    const value = parseInt(bulkStockValue || "0", 10) || 0;
+    onChange({
+      colors,
+      sizes,
+      variantStock: variantStock.map((v) => (predicate(v) ? { ...v, stock: value } : v)),
     });
   }
 
@@ -251,33 +445,71 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
         </div>
       </div>
 
-      <div>
-        <label className="mb-1.5 block font-body text-xs text-muted">Sizes (comma separated, optional)</label>
-        <input
-          value={sizes.join(", ")}
-          onChange={(e) => updateSizes(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
-          placeholder="S, M, L, XL"
-          className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
-        />
-      </div>
+      <SizesEditor sizes={sizes} onChange={updateSizes} />
 
       {(colors.length > 0 || sizes.length > 0) && (
         <div>
-          <label className="mb-2 block font-body text-xs text-muted">Stock per variant</label>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <label className="font-body text-xs text-muted">Stock per variant</label>
+            <div className="flex items-center gap-1.5">
+              <span className="font-body text-[11px] text-muted">Quick fill</span>
+              <input
+                type="number"
+                min={0}
+                value={bulkStockValue}
+                onChange={(e) => setBulkStockValue(e.target.value)}
+                className="w-14 rounded-lg border border-white/10 bg-bg px-2 py-1 font-mono text-xs text-ink focus:outline-none focus:border-accent/50"
+              />
+              <button
+                type="button"
+                onClick={() => applyBulkStock(() => true)}
+                className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 font-body text-[11px] font-semibold text-accent hover:bg-accent/20"
+              >
+                Fill all
+              </button>
+            </div>
+          </div>
+          <p className="mb-2 font-body text-[10px] text-muted">
+            Set a number above, then hit &quot;Fill all&quot;, or use the small arrow buttons on a column/row to fill just that color or size.
+          </p>
           <div className="overflow-x-auto rounded-xl border border-white/10">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="bg-bg">
                   <th className="p-2 text-left font-mono text-[10px] uppercase tracking-widest text-muted">Size \ Color</th>
                   {colorNamesForMatrix.map((cn) => (
-                    <th key={cn} className="p-2 text-left font-mono text-[10px] uppercase tracking-widest text-muted">{cn}</th>
+                    <th key={cn} className="p-2 text-left font-mono text-[10px] uppercase tracking-widest text-muted">
+                      <div className="flex items-center gap-1">
+                        <span>{cn}</span>
+                        <button
+                          type="button"
+                          onClick={() => applyBulkStock((v) => v.color === cn)}
+                          title={`Fill ${cn} column with ${bulkStockValue}`}
+                          className="text-muted hover:text-accent"
+                        >
+                          <ArrowDown size={11} />
+                        </button>
+                      </div>
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {sizeListForMatrix.map((sz) => (
                   <tr key={sz} className="border-t border-white/5">
-                    <td className="p-2 font-mono text-xs text-ink">{sz}</td>
+                    <td className="p-2 font-mono text-xs text-ink">
+                      <div className="flex items-center gap-1">
+                        <span>{sz}</span>
+                        <button
+                          type="button"
+                          onClick={() => applyBulkStock((v) => v.size === sz)}
+                          title={`Fill ${sz} row with ${bulkStockValue}`}
+                          className="text-muted hover:text-accent"
+                        >
+                          <ArrowRight size={11} />
+                        </button>
+                      </div>
+                    </td>
                     {colorNamesForMatrix.map((cn) => {
                       const entry = variantStock.find((v) => v.color === cn && v.size === sz);
                       return (

@@ -33,7 +33,7 @@ const CONCURRENCY = 4;
 // as a 502/504 with no indication of which rows, if any, actually made it
 // in. Smaller requests finish comfortably inside any platform's limit and
 // let progress — and partial success — show up incrementally.
-const BATCH_SIZE = 15;
+const BATCH_SIZE = 5;
 const SLOT_LABELS = ["Main", "Hover", "Third"] as const;
 
 type SlotRef = { groupIndex: number; slotIndex: number };
