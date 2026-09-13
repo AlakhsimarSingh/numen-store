@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
-import { computeStock, generateSeoFields, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
+import { computeStock, generateSeoFields, serializeProduct, slugify } from "@/lib/products/products";
 
 // Defensive headroom on top of client-side batching (see BATCH_SIZE in the
 // bulk-import page). Each request now only creates a chunk of products, not
@@ -59,6 +59,29 @@ export async function POST(req: NextRequest) {
   const categories = await prisma.category.findMany({ where: { slug: { in: categorySlugs } } });
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
 
+  // Every row in this import commonly shares the same product name. Calling
+  // generateUniqueSlug() for each row would then re-check name, name-2,
+  // name-3, and so on, turning one batch into a growing number of DB queries.
+  // Load the relevant existing slugs once and reserve new candidates locally.
+  const slugBases = [...new Set(rows.map((row) => slugify(typeof row.name === "string" ? row.name : "") || "product"))];
+  const existingSlugs = await prisma.product.findMany({
+    where: { OR: slugBases.map((base) => ({ slug: { startsWith: base } })) },
+    select: { slug: true },
+  });
+  const reservedSlugs = new Set(existingSlugs.map((product) => product.slug));
+
+  function reserveUniqueSlug(name: string) {
+    const base = slugify(name) || "product";
+    let slug = base;
+    let suffix = 1;
+    while (reservedSlugs.has(slug)) {
+      suffix += 1;
+      slug = `${base}-${suffix}`;
+    }
+    reservedSlugs.add(slug);
+    return slug;
+  }
+
   const created: ReturnType<typeof serializeProduct>[] = [];
   const errors: { index: number; name?: string; error: string }[] = [];
   const startedAt = Date.now();
@@ -100,7 +123,7 @@ export async function POST(req: NextRequest) {
       const images = Array.isArray(row.images) ? row.images.filter((s) => typeof s === "string") : [];
       const sizes = Array.isArray(row.sizes) ? row.sizes.filter((s) => typeof s === "string" && s.trim()) : [];
       const stock = computeStock({ stock: Number(row.stock) || 0, sizes });
-      const slug = await generateUniqueSlug(name);
+      const slug = reserveUniqueSlug(name);
 
       const isNew = Boolean(row.isNew);
       const isSpotlight = Boolean(row.isSpotlight);
