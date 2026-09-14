@@ -31,8 +31,8 @@ export default async function Home() {
       <CategoryTicker />
       {flashDeal && <FlashDealSection deal={flashDeal} />}
       <CategoryGrid />
-      <BestSellersSection products={products} />
       <PersonalizedSection products={products} />
+      <BestSellersSection products={products} />
       <TestimonialsSection testimonials={testimonials} />
     </>
   );

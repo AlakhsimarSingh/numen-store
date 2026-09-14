@@ -17,19 +17,19 @@ export default function PersonalizedSection({ products }: { products: Product[] 
   const byCategory = (slug: string) => products.filter((p) => p.categorySlug === slug);
 
   let list = products.filter((p) => p.isNew);
-  let title = "Celebrity Picks";
-  let subtitle = "Fresh picks based on what's trending.";
+  let title = "The Celebrity Edit";
+  let subtitle = "Fresh picks, chosen by the stars.";
 
   if (favoriteCategories.length > 0) {
     list = favoriteCategories.flatMap(byCategory);
-    title = user?.name ? `Picked for ${user.name.split(" ")[0]}` : "Picked for You";
-    subtitle = "Based on the categories you follow.";
+    title = user?.name ? `The Celebrity Edit for ${user.name.split(" ")[0]}` : "The Celebrity Edit";
+    subtitle = "Fresh picks, chosen by the stars.";
   } else if (wishlistIds.length > 0) {
     const wishlisted = products.filter((p) => wishlistIds.includes(p.id));
     const categorySlugs = [...new Set(wishlisted.map((p) => p.categorySlug))];
     list = categorySlugs.flatMap(byCategory).filter((p) => !wishlistIds.includes(p.id));
-    title = "More Like Your Wishlist";
-    subtitle = "Similar to the pieces you've saved.";
+    title = "Star-Worthy Picks";
+    subtitle = "More pieces inspired by what you've saved.";
   }
 
   const uniqueList = Array.from(new Map(list.map((p) => [p.id, p])).values()).slice(0, 8);
