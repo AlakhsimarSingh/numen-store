@@ -15,8 +15,9 @@ export interface AdminOrder extends Order {
   customer: AdminOrderCustomer;
 }
 
-export async function fetchAllOrders(): Promise<AdminOrder[]> {
-  const res = await fetch("/api/admin/orders", { credentials: "include" });
+export async function fetchAllOrders(promoCode?: string): Promise<AdminOrder[]> {
+  const query = promoCode ? `?promoCode=${encodeURIComponent(promoCode)}` : "";
+  const res = await fetch(`/api/admin/orders${query}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to load orders.");
   return res.json();
 }

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { Check, ExternalLink, Loader2, Package, RotateCcw, Truck, X } from "lucide-react";
 import { fetchAllOrders, updateOrderStatusAdmin, updateReturnDecision, AdminOrder } from "@/src/lib/adminOrders";
+import { fetchPromoCodes, PromoCode } from "@/src/lib/promoCodes";
 import { OrderStatus, PaymentStatus } from "@/src/lib/orders";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { cn } from "@/src/lib/utils";
@@ -45,14 +46,20 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<AdminOrder | null>(null);
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [selectedPromoCode, setSelectedPromoCode] = useState("");
   const showToast = useToastStore((s) => s.show);
 
   useEffect(() => {
-    fetchAllOrders()
+    fetchAllOrders(selectedPromoCode || undefined)
       .then(setOrders)
       .catch(() => showToast("Failed to load orders.", "error"))
       .finally(() => setLoading(false));
-  }, [showToast]);
+  }, [selectedPromoCode, showToast]);
+
+  useEffect(() => {
+    fetchPromoCodes().then(setPromoCodes).catch(() => {});
+  }, []);
 
   async function handleStatusChange(orderId: string, status: OrderStatus) {
     try {
@@ -87,9 +94,18 @@ export default function AdminOrdersPage() {
   return (
     <div>
       <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">Orders</h1>
-      <p className="mt-1 font-body text-sm text-muted">
-        {orders.length} order{orders.length !== 1 ? "s" : ""} placed
-      </p>
+      <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="font-body text-sm text-muted">{orders.length} order{orders.length !== 1 ? "s" : ""} placed{selectedPromoCode ? " with this signature" : ""}</p>
+        <select
+          value={selectedPromoCode}
+          onChange={(e) => setSelectedPromoCode(e.target.value)}
+          className="w-full rounded-xl border border-white/10 bg-surface px-3 py-2 font-body text-xs text-ink focus:outline-none focus:border-accent/50 sm:w-72"
+          aria-label="Filter orders by representative signature"
+        >
+          <option value="">All representative signatures</option>
+          {promoCodes.map((promo) => <option key={promo.code} value={promo.code}>{promo.code} · {promo.businessName}</option>)}
+        </select>
+      </div>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-white/5 bg-surface">
         <div className="hidden grid-cols-[1fr_1fr_100px_120px_110px_100px] gap-4 border-b border-white/5 px-5 py-3 font-mono text-[10px] uppercase tracking-widest text-muted lg:grid">

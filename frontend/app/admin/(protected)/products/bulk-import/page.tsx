@@ -35,6 +35,8 @@ const CONCURRENCY = 4;
 // let progress — and partial success — show up incrementally.
 const BATCH_SIZE = 5;
 const SLOT_LABELS = ["Main", "Hover", "Third", "Fourth", "Fifth", "Sixth"] as const;
+const APPAREL_SIZE_PRESETS = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
+const MAX_SIZE_RANGE_SPAN = 100;
 
 type SlotRef = { groupIndex: number; slotIndex: number };
 
@@ -99,6 +101,10 @@ export default function BulkImportPage() {
   const [price, setPrice] = useState("");
   const [compareAtPrice, setCompareAtPrice] = useState("");
   const [stock, setStock] = useState("0");
+  const [sizes, setSizes] = useState<string[]>([]);
+  const [sizeDraft, setSizeDraft] = useState("");
+  const [sizeRangeFrom, setSizeRangeFrom] = useState("");
+  const [sizeRangeTo, setSizeRangeTo] = useState("");
 
   // The rearrangeable grid. Derived from files/imagesPerProduct whenever
   // either changes (a fresh selection or a different grouping size), but
@@ -126,6 +132,38 @@ export default function BulkImportPage() {
 
   const folderInputRef = useRef<HTMLInputElement>(null);
   const imagesInputRef = useRef<HTMLInputElement>(null);
+
+  function addSizes(raw: string) {
+    const parsedSizes = raw.split(/[,...\s]+/).map((value) => value.trim()).filter(Boolean);
+    if (parsedSizes.length === 0) return;
+    setSizes((current) => {
+      const next = [...current];
+      for (const size of parsedSizes) {
+        if (!next.some((existing) => existing.toLowerCase() === size.toLowerCase())) next.push(size);
+      }
+      return next;
+    });
+  }
+
+  function addSizeRange() {
+    const from = Number.parseInt(sizeRangeFrom, 10);
+    const to = Number.parseInt(sizeRangeTo, 10);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return;
+    const start = Math.min(from, to);
+    const end = Math.max(from, to);
+    if (end - start > MAX_SIZE_RANGE_SPAN) return;
+    addSizes(Array.from({ length: end - start + 1 }, (_, index) => String(start + index)).join(" "));
+    setSizeRangeFrom("");
+    setSizeRangeTo("");
+  }
+
+  function togglePresetSize(size: string) {
+    setSizes((current) =>
+      current.some((existing) => existing.toLowerCase() === size.toLowerCase())
+        ? current.filter((existing) => existing.toLowerCase() !== size.toLowerCase())
+        : [...current, size]
+    );
+  }
 
   // Blob URLs, cached per File object rather than regenerated on every
   // render. `URL.createObjectURL(file)` called directly inside JSX (as
@@ -184,6 +222,10 @@ export default function BulkImportPage() {
     setSkippedGroupIds(new Set());
     setResults(null);
     setDetectedFolder(null);
+    setSizes([]);
+    setSizeDraft("");
+    setSizeRangeFrom("");
+    setSizeRangeTo("");
     setSelectedSlot(null);
     setShowCreatedList(false);
   }
@@ -368,6 +410,7 @@ export default function BulkImportPage() {
       image: uploadedUrls[i][0],
       images: uploadedUrls[i].slice(1).filter(Boolean),
       stock,
+      sizes,
     }));
 
     setProgress(null); // uploads are done — swap the progress bar over to creation
@@ -561,6 +604,81 @@ export default function BulkImportPage() {
                   />
                 </div>
                 <div>
+
+              <div className="mt-5">
+                <FieldLabel>Sizes (applies to all products)</FieldLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {APPAREL_SIZE_PRESETS.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => togglePresetSize(size)}
+                      className={cn(
+                        "rounded-full border px-3 py-1 font-mono text-[11px] transition-colors",
+                        sizes.includes(size) ? "border-accent bg-accent/10 text-accent" : "border-white/10 text-muted hover:text-ink"
+                      )}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={sizeRangeFrom}
+                    onChange={(e) => setSizeRangeFrom(e.target.value)}
+                    placeholder="28"
+                    className="w-16 rounded-lg border border-white/10 bg-bg px-2 py-1.5 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                  />
+                  <span className="font-body text-[10px] text-muted">to</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={sizeRangeTo}
+                    onChange={(e) => setSizeRangeTo(e.target.value)}
+                    placeholder="34"
+                    className="w-16 rounded-lg border border-white/10 bg-bg px-2 py-1.5 font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={addSizeRange}
+                    disabled={!sizeRangeFrom || !sizeRangeTo}
+                    className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1.5 font-body text-[11px] font-semibold text-accent hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Add range
+                  </button>
+                  <input
+                    value={sizeDraft}
+                    onChange={(e) => setSizeDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addSizes(sizeDraft);
+                        setSizeDraft("");
+                      }
+                    }}
+                    placeholder="Other sizes"
+                    className="min-w-36 flex-1 rounded-lg border border-white/10 bg-bg px-3 py-1.5 font-body text-xs text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                  />
+                </div>
+                {sizes.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {sizes.map((size) => (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() => setSizes((current) => current.filter((existing) => existing !== size))}
+                        className="rounded-full bg-accent/10 px-2.5 py-1 font-mono text-[10px] text-accent hover:bg-accent/20"
+                        title={`Remove size ${size}`}
+                      >
+                        {size} ×
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-2 font-mono text-[10px] text-muted">Leave empty for one-size products. Use presets, a numeric range, or type custom sizes.</p>
+              </div>
                   <FieldLabel>Compare-at (₹)</FieldLabel>
                   <input
                     type="number"

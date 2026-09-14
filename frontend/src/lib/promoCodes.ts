@@ -83,3 +83,32 @@ export async function deletePromoCode(code: string): Promise<void> {
     throw new Error(data?.error ?? "Failed to delete representative signature.");
   }
 }
+
+export interface RepresentativeSignatureAnalytics {
+  code: string;
+  businessName: string;
+  percent: number;
+  orderCount: number;
+  paidOrderCount: number;
+  paidUnits: number;
+  paidRevenueINR: number;
+  statusCounts: Record<string, number>;
+  topProducts: { productId: string | null; name: string; image: string; units: number; revenueINR: number }[];
+  recentOrders: {
+    id: string;
+    placedAt: string;
+    status: string;
+    paymentStatus: string;
+    currency: string;
+    subtotal: number;
+    subtotalBaseINR: number;
+    itemCount: number;
+  }[];
+}
+
+export async function fetchSignatureAnalytics(code: string): Promise<RepresentativeSignatureAnalytics> {
+  const res = await fetch(`/api/promo-codes/${encodeURIComponent(code)}`, { credentials: "include", cache: "no-store" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to load signature performance.");
+  return data;
+}

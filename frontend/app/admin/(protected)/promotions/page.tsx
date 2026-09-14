@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
-import { Loader2, Plus, Store, Tag, Trash2, X } from "lucide-react";
+import { BarChart3, Loader2, Plus, Store, Tag, Trash2, X } from "lucide-react";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { cn } from "@/src/lib/utils";
-import { createPromoCode, deletePromoCode, fetchPromoCodes, PromoCode, updatePromoCode } from "@/src/lib/promoCodes";
+import { createPromoCode, deletePromoCode, fetchPromoCodes, fetchSignatureAnalytics, PromoCode, RepresentativeSignatureAnalytics, updatePromoCode } from "@/src/lib/promoCodes";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
@@ -31,6 +32,8 @@ export default function AdminPromotionsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [analytics, setAnalytics] = useState<RepresentativeSignatureAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +117,17 @@ export default function AdminPromotionsPage() {
     }
   }
 
+  async function openAnalytics(code: string) {
+    setAnalyticsLoading(true);
+    try {
+      setAnalytics(await fetchSignatureAnalytics(code));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to load signature performance.", "error");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -180,12 +194,80 @@ export default function AdminPromotionsPage() {
                 {p.publiclyListed ? "Public" : "Private"}
               </button>
             </div>
+            <button
+              type="button"
+              onClick={() => openAnalytics(p.code)}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-accent/30 py-2 font-body text-xs font-semibold text-accent transition-colors hover:bg-accent/10"
+            >
+              <BarChart3 size={14} /> View performance
+            </button>
           </div>
         ))}
         {promoCodes.length === 0 && (
           <p className="col-span-full py-10 text-center font-body text-sm text-muted">No representative signatures yet.</p>
         )}
       </div>
+
+      {(analytics || analyticsLoading) && (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-bg/80 px-4 backdrop-blur-sm" onClick={() => !analyticsLoading && setAnalytics(null)}>
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.25, ease }}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[88vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-surface p-5 sm:p-7"
+          >
+            {analyticsLoading && !analytics ? (
+              <div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin text-muted" size={26} /></div>
+            ) : analytics ? (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-mono text-xs uppercase tracking-widest text-accent">Signature performance</p>
+                    <h2 className="mt-1 font-display text-2xl font-bold text-ink">{analytics.code}</h2>
+                    <p className="mt-1 font-body text-sm text-muted">{analytics.businessName}</p>
+                  </div>
+                  <button onClick={() => setAnalytics(null)} className="text-muted hover:text-ink" aria-label="Close performance details"><X size={19} /></button>
+                </div>
+
+                <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div className="rounded-xl border border-white/5 bg-bg p-4"><p className="font-mono text-[10px] uppercase tracking-widest text-muted">Attributed orders</p><p className="mt-2 font-display text-2xl font-bold text-ink">{analytics.orderCount}</p><p className="mt-1 font-body text-xs text-muted">{analytics.paidOrderCount} paid</p></div>
+                  <div className="rounded-xl border border-white/5 bg-bg p-4"><p className="font-mono text-[10px] uppercase tracking-widest text-muted">Paid revenue</p><p className="mt-2 font-display text-2xl font-bold text-accent">{formatINR(analytics.paidRevenueINR)}</p><p className="mt-1 font-body text-xs text-muted">subtotal in INR</p></div>
+                  <div className="rounded-xl border border-white/5 bg-bg p-4"><p className="font-mono text-[10px] uppercase tracking-widest text-muted">Units sold</p><p className="mt-2 font-display text-2xl font-bold text-ink">{analytics.paidUnits}</p><p className="mt-1 font-body text-xs text-muted">across paid orders</p></div>
+                  <div className="rounded-xl border border-white/5 bg-bg p-4"><p className="font-mono text-[10px] uppercase tracking-widest text-muted">Conversion signal</p><p className="mt-2 font-display text-2xl font-bold text-ink">{analytics.orderCount ? `${Math.round((analytics.paidOrderCount / analytics.orderCount) * 100)}%` : "—"}</p><p className="mt-1 font-body text-xs text-muted">paid / attributed</p></div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[1.1fr_1fr]">
+                  <div className="rounded-xl border border-white/5 bg-bg p-4">
+                    <p className="font-mono text-xs uppercase tracking-widest text-accent">All products sold · sorted by units</p>
+                    <div className="mt-3 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
+                      {analytics.topProducts.map((product) => (
+                        <div key={`${product.productId}-${product.name}`} className="flex items-center gap-3">
+                          <div className="relative h-12 w-10 shrink-0 overflow-hidden rounded-lg bg-surface2"><Image src={product.image} alt="" fill sizes="40px" className="object-cover" /></div>
+                          <div className="min-w-0 flex-1"><p className="truncate font-body text-sm text-ink">{product.name}</p><p className="font-body text-xs text-muted">{product.units} unit{product.units !== 1 ? "s" : ""}</p></div>
+                          <span className="shrink-0 font-mono text-xs text-accent">{formatINR(product.revenueINR)}</span>
+                        </div>
+                      ))}
+                      {analytics.topProducts.length === 0 && <p className="py-6 text-center font-body text-sm text-muted">No paid product sales yet.</p>}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/5 bg-bg p-4">
+                    <p className="font-mono text-xs uppercase tracking-widest text-accent">Order status</p>
+                    <div className="mt-3 space-y-2">
+                      {Object.entries(analytics.statusCounts).map(([status, count]) => <div key={status} className="flex justify-between font-body text-sm"><span className="capitalize text-muted">{status.toLowerCase()}</span><span className="font-mono text-ink">{count}</span></div>)}
+                    </div>
+                    <p className="mt-6 font-mono text-xs uppercase tracking-widest text-accent">All attributed orders</p>
+                    <div className="mt-3 max-h-[28rem] space-y-2 overflow-y-auto">
+                      {analytics.recentOrders.map((order) => <div key={order.id} className="flex items-center justify-between gap-3 border-b border-white/5 pb-2 font-body text-xs"><span className="truncate text-muted">{order.id.slice(-8)} · {new Date(order.placedAt).toLocaleDateString()}</span><span className="shrink-0 font-mono text-ink">{formatINR(order.subtotalBaseINR)}</span></div>)}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </motion.div>
+        </div>
+      )}
 
       {modalOpen && (
         <div
