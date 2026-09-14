@@ -248,7 +248,7 @@ export default function AdminOrdersPage() {
                   </div>
                   {selected.promoCode && (
                     <div className="flex justify-between">
-                      <span className="text-muted">Promo code</span>
+                      <span className="text-muted">Representative signature</span>
                       <span className="font-mono text-ink">{selected.promoCode}</span>
                     </div>
                   )}

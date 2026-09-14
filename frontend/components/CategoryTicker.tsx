@@ -1,25 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { fetchCategories, Category } from "@/src/lib/categories";
-import { iconOptions, iconNames } from "@/src/lib/iconMap";
+import { Pause, Play, Quote, Sparkles } from "lucide-react";
+
+const quotes = [
+  "Good taste is a quiet kind of confidence.",
+  "The right fit changes the way you move.",
+  "Dress like your point of view matters.",
+  "Style is how you make the everyday feel considered.",
+  "The best looks start with knowing yourself.",
+  "Wear what feels unmistakably yours.",
+];
 
 export default function CategoryTicker() {
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    fetchCategories()
-      .then(setCategories)
-      .catch(() => {
-        // Silently fail — the ticker just won't render if this errors.
-      });
-  }, []);
-
-  if (categories.length === 0) return null;
-
-  const loop = [...categories, ...categories];
+  const [paused, setPaused] = useState(false);
+  const loop = [...quotes, ...quotes];
 
   return (
     <motion.div
@@ -28,18 +24,48 @@ export default function CategoryTicker() {
       transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       className="relative overflow-hidden border-y border-white/5 bg-surface py-3"
     >
-      <div className="flex w-max animate-marquee gap-8">
-        {loop.map((cat, i) => {
-          const Icon = iconOptions[cat.iconName] ?? iconOptions[iconNames[0]];
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 pb-2">
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted">
+          <Sparkles size={12} className="text-accent" />
+          <span>MINDSET</span>
+          <span className="h-1 w-1 animate-pulse rounded-full bg-accent" />
+        </div>
+        <button
+          type="button"
+          onClick={() => setPaused((current) => !current)}
+          aria-label={paused ? "Play editorial notes" : "Pause editorial notes"}
+          title={paused ? "Play" : "Pause"}
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-muted transition-colors hover:border-accent/50 hover:text-accent"
+        >
+          {paused ? <Play size={11} fill="currentColor" /> : <Pause size={11} fill="currentColor" />}
+        </button>
+      </div>
+
+      <div
+        className="flex w-max animate-marquee gap-3 px-6"
+        style={{ animationPlayState: paused ? "paused" : "running" }}
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onTouchStart={() => setPaused(true)}
+      >
+        {loop.map((quote, i) => {
           return (
-            <Link
-              key={`${cat.slug}-${i}`}
-              href={`/shop/${cat.slug}`}
-              className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 px-4 py-1.5 text-sm text-muted transition-colors hover:border-accent/50 hover:text-ink"
+            <div
+              key={`${quote}-${i}`}
+              className={`group flex shrink-0 items-center gap-3 rounded-xl border px-4 py-2.5 transition-colors duration-300 ${
+                i % 3 === 1
+                  ? "border-accent/30 bg-accent text-bg"
+                  : "border-white/10 bg-bg/30 text-muted hover:border-accent/40 hover:text-ink"
+              }`}
             >
-              <Icon size={14} strokeWidth={1.75} className="text-accent" />
-              <span className="font-body">{cat.name}</span>
-            </Link>
+              <Quote
+                size={14}
+                strokeWidth={1.8}
+                className={i % 3 === 1 ? "text-bg/60" : "text-accent"}
+              />
+              <span className="font-display text-sm font-medium tracking-wide">{quote}</span>
+              <span className="font-mono text-[9px] opacity-50">{String((i % quotes.length) + 1).padStart(2, "0")}</span>
+            </div>
           );
         })}
       </div>

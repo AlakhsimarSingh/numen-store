@@ -155,7 +155,7 @@ export default function BulkImportPage() {
   }
 
   useEffect(() => {
-    fetchCategories().then(setCategories).catch(() => {});
+    fetchCategories(true).then(setCategories).catch(() => {});
   }, []);
 
   useEffect(() => {

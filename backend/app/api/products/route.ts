@@ -4,7 +4,11 @@ import { requireAdmin } from "@/lib/auth/session";
 import { computeStock, generateSeoFields, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
 
 export async function GET() {
-  const products = await prisma.product.findMany({ orderBy: { createdAt: "desc" } });
+  const admin = await requireAdmin();
+  const products = await prisma.product.findMany({
+    where: admin ? undefined : { category: { isVisible: true } },
+    orderBy: { createdAt: "desc" },
+  });
   return NextResponse.json(products.map(serializeProduct));
 }
 

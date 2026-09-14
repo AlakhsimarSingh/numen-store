@@ -21,7 +21,7 @@ export interface PartnerListing {
 
 export async function fetchPromoCodes(): Promise<PromoCode[]> {
   const res = await fetch("/api/promo-codes", { credentials: "include", cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load promo codes.");
+  if (!res.ok) throw new Error("Failed to load representative signatures.");
   return res.json();
 }
 
@@ -30,7 +30,7 @@ export async function fetchPromoCodes(): Promise<PromoCode[]> {
 // back (enforced server-side).
 export async function fetchPartners(): Promise<PartnerListing[]> {
   const res = await fetch("/api/promo-codes/partners", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load partners.");
+  if (!res.ok) throw new Error("Failed to load representative signatures.");
   return res.json();
 }
 
@@ -52,7 +52,7 @@ export async function createPromoCode(input: {
     body: JSON.stringify(input),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to create promo code.");
+  if (!res.ok) throw new Error(data.error ?? "Failed to create representative signature.");
   return data;
 }
 
@@ -72,7 +72,7 @@ export async function updatePromoCode(
     body: JSON.stringify(updates),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to update promo code.");
+  if (!res.ok) throw new Error(data.error ?? "Failed to update representative signature.");
   return data;
 }
 
@@ -80,6 +80,6 @@ export async function deletePromoCode(code: string): Promise<void> {
   const res = await fetch(`/api/promo-codes/${code}`, { method: "DELETE", credentials: "include" });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
-    throw new Error(data?.error ?? "Failed to delete promo code.");
+    throw new Error(data?.error ?? "Failed to delete representative signature.");
   }
 }

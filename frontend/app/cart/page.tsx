@@ -59,7 +59,7 @@ export default function CartPage() {
     revalidatePromo().then(() => {
       const stillHasPromo = !!useCheckoutStore.getState().promoCode;
       if (!stillHasPromo) {
-        showToast("Your code was no longer valid and has been removed — please add another to continue.", "info");
+        showToast("Your representative signature was no longer valid and has been removed — please add another to continue.", "info");
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,8 +107,8 @@ export default function CartPage() {
   async function handleApplyPromo() {
     setPromoApplying(true);
     const ok = await applyPromo(promoInput.trim());
-    setPromoError(ok ? "" : "That code isn't valid.");
-    showToast(ok ? `${useCheckoutStore.getState().discountPercent}% discount applied` : "Invalid promo code", ok ? "success" : "error");
+    setPromoError(ok ? "" : "That representative signature isn't valid.");
+    showToast(ok ? `${useCheckoutStore.getState().discountPercent}% discount applied` : "Invalid representative signature", ok ? "success" : "error");
     setPromoApplying(false);
   }
 
@@ -116,7 +116,7 @@ export default function CartPage() {
     clearPromo();
     setPromoInput("");
     setPromoError("");
-    showToast("Code removed", "info");
+    showToast("Representative signature removed", "info");
   }
 
   if (items.length === 0) {
@@ -226,7 +226,7 @@ export default function CartPage() {
               <button
                 type="button"
                 onClick={handleClearPromo}
-                aria-label="Remove code"
+                aria-label="Remove representative signature"
                 className="shrink-0 text-muted hover:text-accent2"
               >
                 <X size={15} />
@@ -240,7 +240,7 @@ export default function CartPage() {
                   <input
                     value={promoInput}
                     onChange={(e) => setPromoInput(e.target.value)}
-                    placeholder="Promo or partner code"
+                    placeholder="Representative signature"
                     disabled={promoRevalidating}
                     className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none disabled:opacity-60"
                   />
@@ -259,7 +259,7 @@ export default function CartPage() {
                 onClick={() => setPickerOpen(true)}
                 className="mt-2 flex items-center gap-1.5 font-body text-xs text-accent hover:underline"
               >
-                {/* <Store size={12} /> Don&apos;t have a code? Connect with a seller */}
+                {/* <Store size={12} /> Don&apos;t have a representative signature? Connect with a seller */}
               </button>
             </>
           )}
@@ -316,7 +316,7 @@ export default function CartPage() {
                 Proceed to Checkout
               </button>
               <p className="mt-2 text-center font-mono text-[10px] text-muted">
-                Add a code or connect with a seller above to continue.
+                Add a representative signature or connect with a seller above to continue.
               </p>
             </div>
           )}

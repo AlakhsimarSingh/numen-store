@@ -17,7 +17,7 @@ export default function PersonalizedSection({ products }: { products: Product[] 
   const byCategory = (slug: string) => products.filter((p) => p.categorySlug === slug);
 
   let list = products.filter((p) => p.isNew);
-  let title = "Curated For You";
+  let title = "Celebrity Picks";
   let subtitle = "Fresh picks based on what's trending.";
 
   if (favoriteCategories.length > 0) {

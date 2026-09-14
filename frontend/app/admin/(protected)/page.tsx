@@ -93,7 +93,7 @@ export default function AdminDashboard() {
 
       <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="New Customers (7d)" value={String(data.newCustomersCount)} icon={Users} />
-        <StatCard label="Active Promo Codes" value={String(data.activePromoCount)} icon={Tag} />
+        <StatCard label="Active Representative Signatures" value={String(data.activePromoCount)} icon={Tag} />
         <StatCard label="Active Flash Deals" value={String(data.activeFlashDealsCount)} icon={Zap} />
         <StatCard
           label="Pending Returns"

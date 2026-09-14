@@ -8,21 +8,25 @@ interface PreviewSource {
 }
 
 function serialize(
-  c: { slug: string; name: string; iconName: string; _count: { products: number } },
+  c: { slug: string; name: string; iconName: string; isVisible: boolean; _count: { products: number } },
   previewImage?: string
 ) {
   return {
     slug: c.slug,
     name: c.name,
     iconName: c.iconName,
+    isVisible: c.isVisible,
     productCount: c._count.products,
     ...(previewImage ? { previewImage } : {}),
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const admin = await requireAdmin();
+  const includeHidden = admin && new URL(req.url).searchParams.get("includeHidden") === "true";
   const [categories, spotlightProducts, recentProducts] = await Promise.all([
     prisma.category.findMany({
+      where: includeHidden ? undefined : { isVisible: true },
       include: { _count: { select: { products: true } } },
       orderBy: { name: "asc" },
     }),
@@ -32,7 +36,7 @@ export async function GET() {
     // spotlighted product per category if there happens to be more than
     // one.
     prisma.product.findMany({
-      where: { isSpotlight: true },
+      where: { isSpotlight: true, ...(includeHidden ? {} : { category: { isVisible: true } }) },
       orderBy: { createdAt: "desc" },
       distinct: ["categorySlug"],
       select: { categorySlug: true, image: true },
@@ -41,6 +45,7 @@ export async function GET() {
     // added product in that category, so every category with at least one
     // product gets a preview image even if the admin never curated one.
     prisma.product.findMany({
+      where: includeHidden ? undefined : { category: { isVisible: true } },
       orderBy: { createdAt: "desc" },
       distinct: ["categorySlug"],
       select: { categorySlug: true, image: true },
@@ -74,7 +79,7 @@ export async function POST(req: NextRequest) {
     .replace(/(^-|-$)/g, "");
 
   try {
-    const category = await prisma.category.create({ data: { slug, name, iconName } });
+    const category = await prisma.category.create({ data: { slug, name, iconName, isVisible: true } });
     return NextResponse.json(serialize({ ...category, _count: { products: 0 } }), { status: 201 });
   } catch {
     return NextResponse.json({ error: "A category with that name already exists." }, { status: 409 });

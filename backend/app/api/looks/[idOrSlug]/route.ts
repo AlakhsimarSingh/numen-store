@@ -3,22 +3,28 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { serializeLook, validateHotspots } from "@/lib/looks/looks";
 
-async function findLook(idOrSlug: string) {
+async function findLook(idOrSlug: string, includeHiddenProducts = true) {
+  const hotspotInclude = {
+    where: includeHiddenProducts ? undefined : { product: { category: { isVisible: true } } },
+    include: { product: true },
+    orderBy: { createdAt: "asc" as const },
+  };
   const bySlug = await prisma.look.findUnique({
     where: { slug: idOrSlug },
-    include: { hotspots: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+    include: { hotspots: hotspotInclude },
   });
   if (bySlug) return bySlug;
   return prisma.look.findUnique({
     where: { id: idOrSlug },
-    include: { hotspots: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+    include: { hotspots: hotspotInclude },
   });
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ idOrSlug: string }> }) {
   const { idOrSlug } = await params;
-  const look = await findLook(idOrSlug);
-  if (!look || (!look.active && !(await requireAdmin()))) {
+  const admin = await requireAdmin();
+  const look = await findLook(idOrSlug, Boolean(admin));
+  if (!look || (!look.active && !admin)) {
     return NextResponse.json({ error: "Look not found." }, { status: 404 });
   }
   return NextResponse.json(serializeLook(look));

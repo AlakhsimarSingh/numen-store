@@ -2,11 +2,23 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { categories } from "@/src/data/categories";
+import { useEffect, useState } from "react";
+import { fetchCategories, Category } from "@/src/lib/categories";
+import CategoryCard from "@/components/CategoryCard";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
 export default function CategoryGrid() {
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    fetchCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  const featuredCategories = [...categories].sort((a, b) => b.productCount - a.productCount).slice(0, 4);
+
+  if (featuredCategories.length === 0) return null;
+
   return (
     <section className="mx-auto max-w-7xl px-6 py-16">
       <motion.div
@@ -16,34 +28,26 @@ export default function CategoryGrid() {
         transition={{ duration: 0.6, ease }}
         className="mb-8"
       >
-        <span className="mb-2 block font-mono text-xs uppercase tracking-widest text-accent">
-          Browse
-        </span>
-        <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">Shop by Category</h2>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <span className="mb-2 block font-mono text-xs uppercase tracking-widest text-accent">Browse</span>
+            <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">Categories</h2>
+          </div>
+          <Link href="/categories" className="shrink-0 font-body text-xs font-semibold text-accent hover:underline">View all</Link>
+        </div>
       </motion.div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {categories.map((cat, i) => {
-          const Icon = cat.icon;
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {featuredCategories.map((category, i) => {
           return (
             <motion.div
-              key={cat.slug}
+              key={category.slug}
               initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.4, delay: (i % 12) * 0.04, ease }}
             >
-              <Link
-                href={`/shop/${cat.slug}`}
-                className="group flex flex-col items-center gap-3 rounded-2xl border border-white/5 bg-surface px-4 py-6 text-center transition-colors hover:border-accent/40 hover:bg-surface2"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface2 text-ink transition-colors group-hover:bg-accent group-hover:text-bg">
-                  <Icon size={18} strokeWidth={1.75} />
-                </div>
-                <span className="font-body text-xs text-muted transition-colors group-hover:text-ink">
-                  {cat.name}
-                </span>
-              </Link>
+              <CategoryCard category={category} />
             </motion.div>
           );
         })}

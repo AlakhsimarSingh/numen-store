@@ -236,7 +236,7 @@ export default function BulkEditProductsPage() {
     async function load() {
       setLoading(true);
       try {
-        const [productsData, categoriesData] = await Promise.all([fetchProducts(), fetchCategories()]);
+        const [productsData, categoriesData] = await Promise.all([fetchProducts(), fetchCategories(true)]);
         if (cancelled) return;
         const rowMap: Record<string, GridRow> = {};
         const ids: string[] = [];

@@ -23,7 +23,7 @@ export default function AdminCategoriesPage() {
 
   function load() {
     setLoading(true);
-    fetchCategories()
+    fetchCategories(true)
       .then(setCategories)
       .catch(() => showToast("Failed to load categories.", "error"))
       .finally(() => setLoading(false));
@@ -67,17 +67,26 @@ export default function AdminCategoriesPage() {
   }
 
   async function handleDelete(cat: Category) {
-    if (cat.productCount > 0) {
-      showToast(`Can't delete — ${cat.productCount} product(s) still use this category`, "error");
-      return;
-    }
-    if (!confirm(`Delete "${cat.name}"?`)) return;
+    const warning = cat.productCount > 0
+      ? `This will permanently delete ${cat.productCount} product(s), their reviews, saved items, and uploaded images. Delete "${cat.name}"?`
+      : `Delete "${cat.name}"?`;
+    if (!confirm(warning)) return;
     try {
       await deleteCategory(cat.slug);
       setCategories((prev) => prev.filter((c) => c.slug !== cat.slug));
       showToast("Category deleted", "info");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Failed to delete category.", "error");
+    }
+  }
+
+  async function handleVisibilityToggle(cat: Category) {
+    try {
+      const updated = await updateCategory(cat.slug, { isVisible: !cat.isVisible });
+      setCategories((prev) => prev.map((c) => (c.slug === cat.slug ? updated : c)));
+      showToast(updated.isVisible ? "Category visible on the website" : "Category hidden from the website", "info");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to update category visibility.", "error");
     }
   }
 
@@ -111,9 +120,16 @@ export default function AdminCategoriesPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-body text-sm text-ink">{cat.name}</p>
-                <p className="font-mono text-xs text-muted">{cat.productCount} products</p>
+                <p className="font-mono text-xs text-muted">{cat.productCount} products · {cat.isVisible ? "Visible" : "Hidden"}</p>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleVisibilityToggle(cat)}
+                  aria-label={cat.isVisible ? `Hide ${cat.name}` : `Show ${cat.name}`}
+                  className={cn("rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-widest", cat.isVisible ? "border-accent/30 text-accent" : "border-white/10 text-muted")}
+                >
+                  {cat.isVisible ? "Visible" : "Hidden"}
+                </button>
                 <button onClick={() => openEdit(cat)} className="text-muted hover:text-accent"><Pencil size={14} /></button>
                 <button onClick={() => handleDelete(cat)} className="text-muted hover:text-accent2"><Trash2 size={14} /></button>
               </div>

@@ -261,7 +261,7 @@ export default function AdminProductsPage() {
     async function load() {
       setLoading(true);
       try {
-        const [productsData, categoriesData] = await Promise.all([fetchProducts(), fetchCategories()]);
+        const [productsData, categoriesData] = await Promise.all([fetchProducts(), fetchCategories(true)]);
         if (!cancelled) {
           setProducts(productsData);
           setCategories(categoriesData);

@@ -12,7 +12,6 @@ const seedCategories: AdminCategory[] = [
   { slug: "belts", name: "Belts", iconName: "Package" },
   { slug: "caps", name: "Caps", iconName: "HardHat" },
   { slug: "cargo-pants", name: "Cargo Pants", iconName: "Layers" },
-  { slug: "face-mask", name: "Face Mask", iconName: "Wind" },
   { slug: "formal-shoes", name: "Formal Shoes", iconName: "Footprints" },
   { slug: "girls-heels", name: "Girls Heels", iconName: "Sparkles" },
   { slug: "jackets", name: "Jackets", iconName: "Shirt" },

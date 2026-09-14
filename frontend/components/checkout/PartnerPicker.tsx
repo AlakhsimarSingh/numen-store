@@ -20,7 +20,7 @@ export default function PartnerPicker({ onClose }: { onClose: () => void }) {
         if (!cancelled) setPartners(data);
       })
       .catch(() => {
-        if (!cancelled) showToast("Couldn't load partners right now.", "error");
+        if (!cancelled) showToast("Couldn't load representative signatures right now.", "error");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -39,7 +39,7 @@ export default function PartnerPicker({ onClose }: { onClose: () => void }) {
       showToast(`Connected with ${partner.businessName}`);
       onClose();
     } else {
-      showToast("That partner code isn't available right now — try another.", "error");
+      showToast("That representative signature isn't available right now — try another.", "error");
     }
   }
 
@@ -64,7 +64,7 @@ export default function PartnerPicker({ onClose }: { onClose: () => void }) {
             <Loader2 className="animate-spin text-muted" size={22} />
           </div>
         ) : partners.length === 0 ? (
-          <p className="py-10 text-center font-body text-sm text-muted">No partners listed right now.</p>
+          <p className="py-10 text-center font-body text-sm text-muted">No representative signatures listed right now.</p>
         ) : (
           <div className="mt-4 space-y-2">
             {partners.map((p) => (

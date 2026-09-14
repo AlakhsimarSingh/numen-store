@@ -8,7 +8,13 @@ export async function GET() {
   const looks = await prisma.look.findMany({
     where: admin ? {} : { active: true },
     orderBy: [{ order: "asc" }, { createdAt: "desc" }],
-    include: { hotspots: { include: { product: true }, orderBy: { createdAt: "asc" } } },
+    include: {
+      hotspots: {
+        where: admin ? undefined : { product: { category: { isVisible: true } } },
+        include: { product: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
   return NextResponse.json(looks.map(serializeLook));
 }

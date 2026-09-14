@@ -15,6 +15,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ idO
   const { idOrSlug } = await params;
   const product = await findProductByIdOrSlug(idOrSlug);
   if (!product) return NextResponse.json({ error: "Product not found." }, { status: 404 });
+  const category = await prisma.category.findUnique({ where: { slug: product.categorySlug }, select: { isVisible: true } });
+  if (!category?.isVisible) return NextResponse.json({ error: "Product not found." }, { status: 404 });
   return NextResponse.json(serializeProduct(product));
 }
 

@@ -62,6 +62,7 @@ export async function searchCatalog(query: string): Promise<CatalogProduct[]> {
   if (terms.length === 0) return [];
 
   const products = await prisma.product.findMany({
+    where: { category: { isVisible: true } },
     include: { category: true },
     take: 300,
   });

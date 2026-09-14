@@ -17,7 +17,7 @@ export function serializeFlashDeal(deal: FlashDeal & { product: Product }) {
 export async function getCurrentFlashDeal() {
   const now = new Date();
   const deal = await prisma.flashDeal.findFirst({
-    where: { active: true, startsAt: { lte: now }, endsAt: { gte: now } },
+    where: { active: true, startsAt: { lte: now }, endsAt: { gte: now }, product: { category: { isVisible: true } } },
     orderBy: { startsAt: "desc" },
     include: { product: true },
   });

@@ -39,7 +39,7 @@ export default function AdminPromotionsPage() {
         if (!cancelled) setPromoCodes(data);
       })
       .catch((err) => {
-        if (!cancelled) showToast(err instanceof Error ? err.message : "Failed to load promo codes", "error");
+        if (!cancelled) showToast(err instanceof Error ? err.message : "Failed to load representative signatures", "error");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -71,11 +71,11 @@ export default function AdminPromotionsPage() {
         publiclyListed: form.publiclyListed,
       });
       setPromoCodes((prev) => [created, ...prev]);
-      showToast("Partner code created");
+      showToast("Representative signature created");
       setModalOpen(false);
       setForm(emptyForm);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to create promo code", "error");
+      showToast(err instanceof Error ? err.message : "Failed to create representative signature", "error");
     } finally {
       setSaving(false);
     }
@@ -88,7 +88,7 @@ export default function AdminPromotionsPage() {
       await updatePromoCode(p.code, { active: nextActive });
     } catch (err) {
       setPromoCodes((prev) => prev.map((x) => (x.code === p.code ? { ...x, active: p.active } : x)));
-      showToast(err instanceof Error ? err.message : "Failed to update promo code", "error");
+      showToast(err instanceof Error ? err.message : "Failed to update representative signature", "error");
     }
   }
 
@@ -99,18 +99,18 @@ export default function AdminPromotionsPage() {
       await updatePromoCode(p.code, { publiclyListed: next });
     } catch (err) {
       setPromoCodes((prev) => prev.map((x) => (x.code === p.code ? { ...x, publiclyListed: p.publiclyListed } : x)));
-      showToast(err instanceof Error ? err.message : "Failed to update promo code", "error");
+      showToast(err instanceof Error ? err.message : "Failed to update representative signature", "error");
     }
   }
 
   async function handleDelete(codeToDelete: string) {
-    if (!confirm(`Delete promo code "${codeToDelete}"?`)) return;
+    if (!confirm(`Delete representative signature "${codeToDelete}"?`)) return;
     try {
       await deletePromoCode(codeToDelete);
       setPromoCodes((prev) => prev.filter((p) => p.code !== codeToDelete));
-      showToast("Promo code deleted", "info");
+      showToast("Representative signature deleted", "info");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to delete promo code", "error");
+      showToast(err instanceof Error ? err.message : "Failed to delete representative signature", "error");
     }
   }
 
@@ -126,16 +126,16 @@ export default function AdminPromotionsPage() {
     <div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">Partners & Promotions</h1>
+          <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">Representative Signatures</h1>
           <p className="mt-1 font-body text-sm text-muted">
-            Every code is tied to a partner business — required at checkout, so every sale is attributable.
+            Each signature connects a representative business to its attributed sales and any customer discount.
           </p>
         </div>
         <button
           onClick={() => setModalOpen(true)}
           className="flex items-center justify-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
         >
-          <Plus size={16} /> New Partner Code
+          <Plus size={16} /> New Representative Signature
         </button>
       </div>
 
@@ -183,7 +183,7 @@ export default function AdminPromotionsPage() {
           </div>
         ))}
         {promoCodes.length === 0 && (
-          <p className="col-span-full py-10 text-center font-body text-sm text-muted">No partner codes yet.</p>
+          <p className="col-span-full py-10 text-center font-body text-sm text-muted">No representative signatures yet.</p>
         )}
       </div>
 
@@ -200,7 +200,7 @@ export default function AdminPromotionsPage() {
             className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-surface p-6"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-lg font-bold text-ink">New Partner Code</h3>
+              <h3 className="font-display text-lg font-bold text-ink">New Representative Signature</h3>
               <button onClick={() => setModalOpen(false)} className="text-muted hover:text-ink">
                 <X size={18} />
               </button>
@@ -287,7 +287,7 @@ export default function AdminPromotionsPage() {
                 className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-3 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01] disabled:opacity-70"
               >
                 {saving && <Loader2 size={16} className="animate-spin" />}
-                {saving ? "Creating…" : "Create Code"}
+                {saving ? "Creating…" : "Create Signature"}
               </button>
             </form>
           </motion.div>

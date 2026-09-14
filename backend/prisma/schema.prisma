@@ -148,10 +148,11 @@ model MagicLinkToken {
 }
 
 model Category {
-  slug     String    @id
-  name     String
-  iconName String
-  products Product[]
+  slug      String   @id
+  name      String
+  iconName  String
+  isVisible Boolean  @default(true)
+  products  Product[]
   sizeChart SizeChart?
 }
 
