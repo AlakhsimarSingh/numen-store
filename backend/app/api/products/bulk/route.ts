@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
       }
 
       const images = Array.isArray(row.images) ? row.images.filter((s) => typeof s === "string") : [];
+      if (images.length > 5) throw new Error("A product can have up to 6 images including the main image.");
       const sizes = Array.isArray(row.sizes) ? row.sizes.filter((s) => typeof s === "string" && s.trim()) : [];
       const stock = computeStock({ stock: Number(row.stock) || 0, sizes });
       const slug = reserveUniqueSlug(name);

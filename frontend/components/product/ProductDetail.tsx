@@ -112,10 +112,10 @@ export default function ProductDetail({
     () =>
       activeColorObj
         ? [
-            ...activeColorObj.images.map((img) => ({ type: "image" as const, src: img })),
+            ...activeColorObj.images.slice(0, 6).map((img) => ({ type: "image" as const, src: img })),
             ...(activeColorObj.video ? [{ type: "video" as const, src: activeColorObj.video }] : []),
           ]
-        : [product.image, ...product.images, ...(product.video ? [product.video] : [])].map((src, i, arr) => ({
+        : [product.image, ...product.images.slice(0, 5), ...(product.video ? [product.video] : [])].map((src, i, arr) => ({
             type: (product.video && i === arr.length - 1 ? "video" : "image") as "image" | "video",
             src,
           })),
@@ -277,7 +277,7 @@ export default function ProductDetail({
                 vertical column to its left on desktop. Same markup, just
                 reordered/reflowed via `order` + flex-direction. */}
             {gallery.length > 1 && (
-              <div className="order-2 flex gap-2.5 overflow-x-auto pb-1 lg:order-1 lg:w-20 lg:shrink-0 lg:flex-col lg:overflow-x-visible lg:overflow-y-auto lg:pb-0">
+              <div className="order-2 flex gap-2.5 overflow-x-auto pb-1 lg:order-1 lg:grid lg:w-36 lg:shrink-0 lg:grid-cols-2 lg:content-start lg:gap-3 lg:overflow-x-visible lg:overflow-y-visible lg:pb-0">
                 {gallery.map((item, i) => {
                   const isActive = i === activeMedia;
                   return (
@@ -287,7 +287,7 @@ export default function ProductDetail({
                       onClick={() => goToMedia(i)}
                       aria-label={item.type === "video" ? "Play product video" : `View image ${i + 1}`}
                       aria-current={isActive}
-                      className="group relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-2xl bg-surface2 lg:w-full"
+                      className="group relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-2xl bg-surface2 lg:w-auto"
                     >
                       {item.type === "video" ? (
                         <video src={item.src} muted playsInline className="h-full w-full object-cover" />

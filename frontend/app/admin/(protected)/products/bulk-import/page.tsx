@@ -34,7 +34,7 @@ const CONCURRENCY = 4;
 // in. Smaller requests finish comfortably inside any platform's limit and
 // let progress — and partial success — show up incrementally.
 const BATCH_SIZE = 5;
-const SLOT_LABELS = ["Main", "Hover", "Third"] as const;
+const SLOT_LABELS = ["Main", "Hover", "Third", "Fourth", "Fifth", "Sixth"] as const;
 
 type SlotRef = { groupIndex: number; slotIndex: number };
 
@@ -91,7 +91,7 @@ export default function BulkImportPage() {
   const showToast = useToastStore((s) => s.show);
   const [categories, setCategories] = useState<Category[]>([]);
   const [files, setFiles] = useState<File[]>([]);
-  const [imagesPerProduct, setImagesPerProduct] = useState<1 | 2 | 3>(1);
+  const [imagesPerProduct, setImagesPerProduct] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [detectedFolder, setDetectedFolder] = useState<string | null>(null);
 
   const [categorySlug, setCategorySlug] = useState("");
@@ -347,7 +347,7 @@ export default function BulkImportPage() {
     setResults(null);
     setShowCreatedList(false);
 
-    const uploadedUrls: string[][] = activeGroupEntries.map(() => ["", "", ""]);
+    const uploadedUrls: string[][] = activeGroupEntries.map(() => Array(6).fill(""));
     const tasks: { file: File; onDone: (url: string) => void }[] = [];
     activeGroupEntries.forEach(({ group }, groupIdx) => {
       group.images.forEach((file, slotIdx) => {
@@ -366,7 +366,7 @@ export default function BulkImportPage() {
       price,
       compareAtPrice: compareAtPrice || undefined,
       image: uploadedUrls[i][0],
-      images: [uploadedUrls[i][1], uploadedUrls[i][2]].filter(Boolean),
+      images: uploadedUrls[i].slice(1).filter(Boolean),
       stock,
     }));
 
@@ -495,7 +495,7 @@ export default function BulkImportPage() {
               <div>
                 <FieldLabel>Images per product</FieldLabel>
                 <div className="flex flex-wrap gap-2">
-                  {([1, 2, 3] as const).map((n) => (
+                  {([1, 2, 3, 4, 5, 6] as const).map((n) => (
                     <button
                       key={n}
                       type="button"

@@ -2,7 +2,7 @@ import type { Category } from "@/src/lib/categories";
 
 export interface ImageGroup {
   id: string;
-  images: (File | null)[]; // padded to 3 slots: [main, hover, third]
+  images: (File | null)[]; // padded to 6 slots: [main, hover, third, fourth, fifth, sixth]
 }
 
 /**
@@ -13,13 +13,13 @@ export interface ImageGroup {
  * The final group may have fewer than `perProduct` images if the total
  * doesn't divide evenly; that's fine, it just means a shorter row.
  */
-export function chunkImages(files: File[], perProduct: 1 | 2 | 3): ImageGroup[] {
+export function chunkImages(files: File[], perProduct: 1 | 2 | 3 | 4 | 5 | 6): ImageGroup[] {
   const groups: ImageGroup[] = [];
   for (let i = 0; i < files.length; i += perProduct) {
     const slice = files.slice(i, i + perProduct);
     groups.push({
       id: `group-${i}`,
-      images: [slice[0] ?? null, slice[1] ?? null, slice[2] ?? null],
+      images: Array.from({ length: 6 }, (_, index) => slice[index] ?? null),
     });
   }
   return groups;

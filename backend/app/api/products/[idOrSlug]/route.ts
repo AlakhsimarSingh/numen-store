@@ -81,7 +81,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (body.images !== undefined) {
-    data.images = Array.isArray(body.images) ? body.images.filter((s: unknown) => typeof s === "string") : [];
+    const images = Array.isArray(body.images) ? body.images.filter((s: unknown) => typeof s === "string") : [];
+    if (images.length > 5) {
+      return NextResponse.json({ error: "A product can have up to 6 images including the main image." }, { status: 400 });
+    }
+    data.images = images;
   }
 
   if (body.video !== undefined) {
@@ -99,7 +103,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data.rating = rating;
   }
 
-  if (body.colors !== undefined) data.colors = Array.isArray(body.colors) ? body.colors : null;
+  if (body.colors !== undefined) {
+    if (Array.isArray(body.colors) && body.colors.some((color: unknown) => {
+      const images = color && typeof color === "object" && "images" in color ? (color as { images?: unknown }).images : undefined;
+      return Array.isArray(images) && images.length > 6;
+    })) {
+      return NextResponse.json({ error: "Each color can have up to 6 images." }, { status: 400 });
+    }
+    data.colors = Array.isArray(body.colors) ? body.colors : null;
+  }
   if (body.sizes !== undefined) {
     data.sizes = Array.isArray(body.sizes) ? body.sizes.filter((s: unknown) => typeof s === "string") : [];
   }

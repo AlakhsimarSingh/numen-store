@@ -68,6 +68,12 @@ export async function POST(req: NextRequest) {
   const regionalPrices =
     body.regionalPrices && typeof body.regionalPrices === "object" ? body.regionalPrices : undefined;
   const images = Array.isArray(body.images) ? body.images.filter((s: unknown) => typeof s === "string") : [];
+  if (images.length > 5) {
+    return NextResponse.json({ error: "A product can have up to 6 images including the main image." }, { status: 400 });
+  }
+  if (Array.isArray(colors) && colors.some((color) => Array.isArray(color?.images) && color.images.length > 6)) {
+    return NextResponse.json({ error: "Each color can have up to 6 images." }, { status: 400 });
+  }
   const video = typeof body.video === "string" && body.video.trim() ? body.video.trim() : undefined;
   const isNew = Boolean(body.isNew);
   const isSpotlight = Boolean(body.isSpotlight);

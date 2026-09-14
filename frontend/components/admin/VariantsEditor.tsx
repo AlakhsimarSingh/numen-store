@@ -29,6 +29,7 @@ const NUMERIC_RANGE_SHORTCUTS = [
 ];
 
 const MAX_RANGE_SPAN = 100; // safety guard against fat-fingering a huge range
+const MAX_IMAGES_PER_COLOR = 6;
 
 function rebuildMatrix(colors: ColorOption[], sizes: string[], existing: VariantStockEntry[]): VariantStockEntry[] {
   const colorNames = colors.length > 0 ? colors.map((c) => c.name) : ["Default"];
@@ -273,7 +274,17 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
 
   function handleImageFilesSelected(colorIndex: number, files: FileList | null) {
     if (!files || files.length === 0) return;
-    const jobs: CropJob[] = Array.from(files).map((file) => ({
+    const currentCount = colors[colorIndex]?.images.length ?? 0;
+    const available = MAX_IMAGES_PER_COLOR - currentCount;
+    if (available <= 0) {
+      setUploadError(`Each color can have up to ${MAX_IMAGES_PER_COLOR} images.`);
+      return;
+    }
+    const selectedFiles = Array.from(files).slice(0, available);
+    if (selectedFiles.length < files.length) {
+      setUploadError(`Only ${MAX_IMAGES_PER_COLOR} images are allowed per color.`);
+    }
+    const jobs: CropJob[] = selectedFiles.map((file) => ({
       colorIndex,
       src: URL.createObjectURL(file),
       fileName: file.name,
@@ -398,14 +409,18 @@ export default function VariantsEditor({ colors, sizes, variantStock, onChange, 
                     </button>
                   </div>
                 ))}
-                <label className="flex aspect-[3/4] w-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 bg-bg text-muted hover:border-accent/40 hover:text-accent">
+                <label className={cn(
+                  "flex aspect-[3/4] w-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 bg-bg text-muted hover:border-accent/40 hover:text-accent",
+                  color.images.length >= MAX_IMAGES_PER_COLOR ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+                )}>
                   {uploadingIndex === i ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
-                  <span className="font-mono text-[9px] uppercase">Add</span>
+                  <span className="font-mono text-[9px] uppercase">{color.images.length >= MAX_IMAGES_PER_COLOR ? "Max" : "Add"}</span>
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     className="hidden"
+                    disabled={color.images.length >= MAX_IMAGES_PER_COLOR}
                     onChange={(e) => {
                       handleImageFilesSelected(i, e.target.files);
                       e.target.value = "";

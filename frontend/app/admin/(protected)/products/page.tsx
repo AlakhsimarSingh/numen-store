@@ -52,6 +52,9 @@ type FormState = {
   image: string;
   hoverImage: string;
   thirdImage: string;
+  fourthImage: string;
+  fifthImage: string;
+  sixthImage: string;
   video: string;
   stock: string;
   weight: string;
@@ -72,6 +75,9 @@ const emptyForm: FormState = {
   image: "",
   hoverImage: "",
   thirdImage: "",
+  fourthImage: "",
+  fifthImage: "",
+  sixthImage: "",
   video: "",
   stock: "",
   weight: "0.3",
@@ -84,7 +90,7 @@ const emptyForm: FormState = {
   regionalPrices: {},
 };
 
-type ImageSlotKey = "image" | "hoverImage" | "thirdImage";
+type ImageSlotKey = "image" | "hoverImage" | "thirdImage" | "fourthImage" | "fifthImage" | "sixthImage";
 
 function chunkArray<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
@@ -324,6 +330,9 @@ export default function AdminProductsPage() {
       image: p.image,
       hoverImage: p.images?.[0] ?? "",
       thirdImage: p.images?.[1] ?? "",
+      fourthImage: p.images?.[2] ?? "",
+      fifthImage: p.images?.[3] ?? "",
+      sixthImage: p.images?.[4] ?? "",
       video: p.video ?? "",
       stock: String(p.stock),
       weight: String(p.weight ?? 0.3),
@@ -501,7 +510,7 @@ export default function AdminProductsPage() {
         ])
     );
 
-    const images = [form.hoverImage, form.thirdImage].filter(Boolean);
+    const images = [form.hoverImage, form.thirdImage, form.fourthImage, form.fifthImage, form.sixthImage].filter(Boolean);
 
     const payload = {
       name: form.name,
@@ -1058,7 +1067,7 @@ export default function AdminProductsPage() {
                   <div>
                     <div className="mb-1.5 flex items-center justify-between">
                       <p className="font-body text-xs text-muted">Product images</p>
-                      {(form.image || form.hoverImage || form.thirdImage) && (
+                      {(form.image || form.hoverImage || form.thirdImage || form.fourthImage || form.fifthImage || form.sixthImage) && (
                         <p className="font-mono text-[9px] text-muted">Click to preview · drag to rearrange</p>
                       )}
                     </div>
@@ -1096,6 +1105,39 @@ export default function AdminProductsPage() {
                         onClear={() => setForm((f) => ({ ...f, thirdImage: "" }))}
                         onView={() => form.thirdImage && setLightboxSrc(form.thirdImage)}
                         {...imageSlotProps("thirdImage")}
+                      />
+                      <ImageSlot
+                        label="Fourth"
+                        hint="Extra shot shown in the product page gallery."
+                        value={form.fourthImage}
+                        uploading={uploadingSlot === "fourthImage"}
+                        onUpload={(f) => handleSlotFileSelected("fourthImage", f)}
+                        onRecrop={() => handleSlotRecrop("fourthImage")}
+                        onClear={() => setForm((f) => ({ ...f, fourthImage: "" }))}
+                        onView={() => form.fourthImage && setLightboxSrc(form.fourthImage)}
+                        {...imageSlotProps("fourthImage")}
+                      />
+                      <ImageSlot
+                        label="Fifth"
+                        hint="Extra shot shown in the product page gallery."
+                        value={form.fifthImage}
+                        uploading={uploadingSlot === "fifthImage"}
+                        onUpload={(f) => handleSlotFileSelected("fifthImage", f)}
+                        onRecrop={() => handleSlotRecrop("fifthImage")}
+                        onClear={() => setForm((f) => ({ ...f, fifthImage: "" }))}
+                        onView={() => form.fifthImage && setLightboxSrc(form.fifthImage)}
+                        {...imageSlotProps("fifthImage")}
+                      />
+                      <ImageSlot
+                        label="Sixth"
+                        hint="Extra shot shown in the product page gallery."
+                        value={form.sixthImage}
+                        uploading={uploadingSlot === "sixthImage"}
+                        onUpload={(f) => handleSlotFileSelected("sixthImage", f)}
+                        onRecrop={() => handleSlotRecrop("sixthImage")}
+                        onClear={() => setForm((f) => ({ ...f, sixthImage: "" }))}
+                        onView={() => form.sixthImage && setLightboxSrc(form.sixthImage)}
+                        {...imageSlotProps("sixthImage")}
                       />
                     </div>
                   </div>
