@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Minus, Plus, ShoppingBag, Store, Tag, Trash2, X } from "lucide-react";
+import { Loader2, Minus, Plus, PartyPopper, ShoppingBag, Store, Tag, Trash2, X } from "lucide-react";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
@@ -76,12 +76,29 @@ export default function CartPage() {
   // Each line's display price honors that product's regional override if
   // one exists, falling back to rate conversion — same logic as the
   // product page, applied per item rather than to a single aggregate.
-  const lineDisplays = items.map((item) => ({
-    item,
-    display: getDisplayPrice(item, currency, rates),
-  }));
+  // compareAtDisplay reuses the exact same currency/regional-override
+  // logic by running the item's compareAtPrice through getDisplayPrice —
+  // so an MRP quoted in the product's base currency converts the same
+  // way the live price does. Only present when the item genuinely has a
+  // compareAtPrice set on it (no invented markups).
+  const lineDisplays = items.map((item) => {
+    const display = getDisplayPrice(item, currency, rates);
+    const compareAtDisplay =
+      item.compareAtPrice && item.compareAtPrice > item.price
+        ? getDisplayPrice({ ...item, price: item.compareAtPrice }, currency, rates)
+        : null;
+    return { item, display, compareAtDisplay };
+  });
   const subtotal = lineDisplays.reduce((sum, { item, display }) => sum + display.price * item.qty, 0);
   const anyEstimated = lineDisplays.some(({ display }) => display.estimated);
+
+  // Genuine markdown savings — sum of (MRP - current price) across lines
+  // that actually have a compareAtPrice. This is never synthesized; it's
+  // zero unless real data backs it.
+  const markdownSavings = lineDisplays.reduce((sum, { item, display, compareAtDisplay }) => {
+    if (!compareAtDisplay) return sum;
+    return sum + (compareAtDisplay.price - display.price) * item.qty;
+  }, 0);
 
   // Shipping is deliberately NOT computed here — it needs a destination
   // pincode, which doesn't exist until the shipping-details step. Only
@@ -99,6 +116,7 @@ export default function CartPage() {
   });
   const discounted = Math.max(0, subtotal - discount);
   const totalExcludingShipping = Math.round((discounted + tax) * 100) / 100;
+  const totalSavings = markdownSavings + discount;
 
   // A code (any code — even 0% discount) is now required to proceed past
   // this page, since it's how orders get attributed to a partner business.
@@ -150,7 +168,7 @@ export default function CartPage() {
 
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1fr_360px]">
         <div className="space-y-4">
-          {lineDisplays.map(({ item, display }, i) => (
+          {lineDisplays.map(({ item, display, compareAtDisplay }, i) => (
             <motion.div
               key={item.productId}
               initial={{ opacity: 0, y: 12 }}
@@ -164,9 +182,14 @@ export default function CartPage() {
 
               <div className="min-w-0 flex-1">
                 <p className="truncate font-body text-sm text-ink">{item.name}</p>
-                <p className="mt-1 font-mono text-sm text-muted">
+                <p className="mt-1 flex items-baseline gap-1.5 font-mono text-sm text-muted">
                   {display.estimated && <span className="text-muted/70">~</span>}
-                  {formatMoney(display.price, currency, symbol)}
+                  <span>{formatMoney(display.price, currency, symbol)}</span>
+                  {compareAtDisplay && (
+                    <span className="text-xs text-muted/60 line-through">
+                      {formatMoney(compareAtDisplay.price, currency, symbol)}
+                    </span>
+                  )}
                 </p>
 
                 <div className="mt-3 flex items-center gap-2">
@@ -265,9 +288,29 @@ export default function CartPage() {
           )}
           {promoError && <p className="mt-1.5 font-mono text-[11px] text-accent2">{promoError}</p>}
 
+          {/* Combined savings banner: markdown (MRP - price) + coupon
+              discount, shown as one graceful line above the breakdown.
+              Only renders when there's something real to show. */}
+          {totalSavings > 0 && (
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/5 px-4 py-2.5">
+              <PartyPopper size={15} className="shrink-0 text-accent" />
+              <p className="font-body text-xs text-ink">
+                You're saving <span className="font-semibold text-accent">{formatMoney(totalSavings, currency, symbol)}</span> on this order
+              </p>
+            </div>
+          )}
+
           <div className="mt-5 space-y-2 border-t border-white/5 pt-4 font-body text-sm">
+            {markdownSavings > 0 && (
+              <div className="flex justify-between text-muted">
+                <span>MRP total</span>
+                <span className="text-muted line-through">
+                  {formatMoney(subtotal + markdownSavings, currency, symbol)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-muted">
-              <span>Subtotal</span>
+              <span>Item total</span>
               <span className="text-ink">
                 {anyEstimated && <span className="text-muted/70">~</span>}
                 {formatMoney(subtotal, currency, symbol)}
@@ -280,20 +323,20 @@ export default function CartPage() {
               </div>
             )}
             <div className="flex justify-between text-muted">
+              <span>Inclusive all Taxes and Accessories</span>
+              <span className="text-ink">{formatMoney(tax, currency, symbol)}</span>
+            </div>
+            <div className="flex justify-between text-muted">
               <span>Shipping</span>
               <span className="font-mono text-xs uppercase tracking-wide text-muted">Calculated at checkout</span>
             </div>
-            <div className="flex justify-between text-muted">
-              <span>Estimated tax</span>
-              <span className="text-ink">{formatMoney(tax, currency, symbol)}</span>
-            </div>
             <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
-              <span className="text-ink">Estimated Total</span>
+              <span className="text-ink">Total (excl. shipping)</span>
               <span className="text-ink">{formatMoney(totalExcludingShipping, currency, symbol)}</span>
             </div>
           </div>
           <p className="mt-2 font-mono text-[10px] text-muted">
-            Excludes shipping — enter your address at checkout for the final total.
+            Taxes and charges shown above are all-inclusive. Shipping is calculated at checkout based on your delivery address.
           </p>
           {anyEstimated && (
             <p className="mt-1 font-mono text-[10px] text-muted">Converted estimate — exact pricing shown at checkout.</p>
