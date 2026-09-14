@@ -323,7 +323,7 @@ export default function CartPage() {
               </div>
             )}
             <div className="flex justify-between text-muted">
-              <span>Inclusive all Taxes and Accessories</span>
+              <span>Inclusive of all Taxes and Accessories</span>
               <span className="text-ink">{formatMoney(tax, currency, symbol)}</span>
             </div>
             <div className="flex justify-between text-muted">
