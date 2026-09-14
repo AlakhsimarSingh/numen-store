@@ -13,7 +13,7 @@ export interface GroqMessage {
 }
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const MODEL = process.env.GROQ_MODEL ?? "llama-3.1-8b-instant";
+const MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 const MAX_RETRIES = 5;
 
 function apiKey() {
