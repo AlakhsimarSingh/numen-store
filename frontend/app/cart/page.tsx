@@ -309,13 +309,6 @@ export default function CartPage() {
                 </span>
               </div>
             )}
-            <div className="flex justify-between text-muted">
-              <span>Item total</span>
-              <span className="text-ink">
-                {anyEstimated && <span className="text-muted/70">~</span>}
-                {formatMoney(subtotal, currency, symbol)}
-              </span>
-            </div>
             {discount > 0 && (
               <div className="flex justify-between text-muted">
                 <span>Discount</span>
@@ -323,20 +316,19 @@ export default function CartPage() {
               </div>
             )}
             <div className="flex justify-between text-muted">
-              <span>Inclusive of all Taxes and Accessories</span>
-              <span className="text-ink">{formatMoney(tax, currency, symbol)}</span>
-            </div>
-            <div className="flex justify-between text-muted">
               <span>Shipping</span>
               <span className="font-mono text-xs uppercase tracking-wide text-muted">Calculated at checkout</span>
             </div>
             <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
-              <span className="text-ink">Total (excl. shipping)</span>
-              <span className="text-ink">{formatMoney(totalExcludingShipping, currency, symbol)}</span>
+              <span className="text-ink">Total (incl. taxes &amp; accessories, excl. shipping)</span>
+              <span className="text-ink">
+                {anyEstimated && <span className="text-muted/70">~</span>}
+                {formatMoney(totalExcludingShipping, currency, symbol)}
+              </span>
             </div>
           </div>
           <p className="mt-2 font-mono text-[10px] text-muted">
-            Taxes and charges shown above are all-inclusive. Shipping is calculated at checkout based on your delivery address.
+            Shipping is calculated at checkout based on your delivery address.
           </p>
           {anyEstimated && (
             <p className="mt-1 font-mono text-[10px] text-muted">Converted estimate — exact pricing shown at checkout.</p>

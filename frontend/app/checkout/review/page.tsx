@@ -315,18 +315,16 @@ export default function ReviewPage() {
 
             <div className="rounded-2xl border border-white/5 bg-surface p-5">
               <div className="space-y-2 font-body text-sm">
-                <div className="flex justify-between text-muted">
-                  <span>Subtotal</span>
-                  <span className="text-ink">
-                    {anyEstimated && <span className="text-muted/70">~</span>}
-                    {formatMoney(subtotal, currency, symbol)}
-                  </span>
-                </div>
                 {discount > 0 && <div className="flex justify-between text-muted"><span>Discount</span><span className="text-accent">-{formatMoney(discount, currency, symbol)}</span></div>}
                 <div className="flex justify-between text-muted"><span>Shipping</span><span className="text-ink">{shippingFee === 0 ? "Free" : formatMoney(shippingFee, currency, symbol)}</span></div>
-                <div className="flex justify-between text-muted"><span>Tax</span><span className="text-ink">{formatMoney(tax, currency, symbol)}</span></div>
                 {codFee > 0 && <div className="flex justify-between text-muted"><span>COD fee</span><span className="text-ink">{formatMoney(codFee, currency, symbol)}</span></div>}
-                <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base"><span className="text-ink">Total</span><span className="text-ink">{formatMoney(total, currency, symbol)}</span></div>
+                <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
+                  <span className="text-ink">Total (incl. taxes &amp; accessories)</span>
+                  <span className="text-ink">
+                    {anyEstimated && <span className="text-muted/70">~</span>}
+                    {formatMoney(total, currency, symbol)}
+                  </span>
+                </div>
               </div>
               {anyEstimated && (
                 <p className="mt-2 font-mono text-[10px] text-muted">Converted estimate — exact pricing shown at checkout.</p>
