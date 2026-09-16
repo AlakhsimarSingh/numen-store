@@ -23,7 +23,7 @@ const ease = [0.16, 1, 0.3, 1] as const;
 const navLinks = [
   { label: "Shop", href: "/shop" },
   { label: "New Drops", href: "/shop?filter=new" },
-  { label: "Shop the Look", href: "/shop-the-look" },
+  // { label: "Shop the Look", href: "/shop-the-look" },
   { label: "About", href: "/about" },
   { label: "Customer Care", href: "/contact" },
 ];

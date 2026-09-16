@@ -97,7 +97,7 @@ export default function CartPage() {
   // zero unless real data backs it.
   const markdownSavings = lineDisplays.reduce((sum, { item, display, compareAtDisplay }) => {
     if (!compareAtDisplay) return sum;
-    return sum + (compareAtDisplay.price - display.price) * item.qty;
+    return sum + (compareAtDisplay.price - display.price + tax) * item.qty;
   }, 0);
 
   // Shipping is deliberately NOT computed here — it needs a destination
@@ -126,7 +126,7 @@ export default function CartPage() {
     setPromoApplying(true);
     const ok = await applyPromo(promoInput.trim());
     setPromoError(ok ? "" : "That representative signature isn't valid.");
-    showToast(ok ? `${useCheckoutStore.getState().discountPercent}% discount applied` : "Invalid representative signature", ok ? "success" : "error");
+    showToast(ok ? "♥ WELCOME TO NUMEN" : "Invalid representative signature", ok ? "success" : "error");
     setPromoApplying(false);
   }
 
@@ -184,10 +184,10 @@ export default function CartPage() {
                 <p className="truncate font-body text-sm text-ink">{item.name}</p>
                 <p className="mt-1 flex items-baseline gap-1.5 font-mono text-sm text-muted">
                   {display.estimated && <span className="text-muted/70">~</span>}
-                  <span>{formatMoney(display.price, currency, symbol)}</span>
+                  <span>{formatMoney(display.price * item.qty, currency, symbol)}</span>
                   {compareAtDisplay && (
                     <span className="text-xs text-muted/60 line-through">
-                      {formatMoney(compareAtDisplay.price, currency, symbol)}
+                      {formatMoney(compareAtDisplay.price * item.qty, currency, symbol)}
                     </span>
                   )}
                 </p>
@@ -303,7 +303,7 @@ export default function CartPage() {
           <div className="mt-5 space-y-2 border-t border-white/5 pt-4 font-body text-sm">
             {markdownSavings > 0 && (
               <div className="flex justify-between text-muted">
-                <span>MRP total</span>
+                <span>Market Value</span>
                 <span className="text-muted line-through">
                   {formatMoney(subtotal + markdownSavings, currency, symbol)}
                 </span>
@@ -320,12 +320,15 @@ export default function CartPage() {
               <span className="font-mono text-xs uppercase tracking-wide text-muted">Calculated at checkout</span>
             </div>
             <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
-              <span className="text-ink">Total (incl. taxes &amp; accessories, excl. shipping)</span>
+              <span className="text-ink">Numen's Value</span>
               <span className="text-ink">
                 {anyEstimated && <span className="text-muted/70">~</span>}
                 {formatMoney(totalExcludingShipping, currency, symbol)}
               </span>
             </div>
+            <p className="text-right font-mono text-[9px] text-muted/40">
+              incl. taxes &amp; accessories, excl. shipping
+            </p>
           </div>
           <p className="mt-2 font-mono text-[10px] text-muted">
             Shipping is calculated at checkout based on your delivery address.

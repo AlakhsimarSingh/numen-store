@@ -13,7 +13,7 @@ const links = [
   { label: "Home", href: "/" },
   { label: "Shop", href: "/shop" },
   { label: "New Drops", href: "/shop?filter=new" },
-  { label: "Shop the Look", href: "/shop-the-look" },
+  // { label: "Shop the Look", href: "/shop-the-look" },
   { label: "Categories", href: "/categories" },
   { label: "About", href: "/about" },
   { label: "Customer Care", href: "/contact" },
