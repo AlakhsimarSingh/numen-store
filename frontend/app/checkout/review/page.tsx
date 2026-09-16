@@ -319,12 +319,15 @@ export default function ReviewPage() {
                 <div className="flex justify-between text-muted"><span>Shipping</span><span className="text-ink">{shippingFee === 0 ? "Free" : formatMoney(shippingFee, currency, symbol)}</span></div>
                 {codFee > 0 && <div className="flex justify-between text-muted"><span>COD fee</span><span className="text-ink">{formatMoney(codFee, currency, symbol)}</span></div>}
                 <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
-                  <span className="text-ink">Total (incl. taxes &amp; accessories)</span>
+                  <span className="text-ink">Numen's Value</span>
                   <span className="text-ink">
                     {anyEstimated && <span className="text-muted/70">~</span>}
                     {formatMoney(total, currency, symbol)}
                   </span>
                 </div>
+                <p className="text-right font-mono text-[9px] text-muted/40">
+                  incl. taxes &amp; accessories
+                </p>
               </div>
               {anyEstimated && (
                 <p className="mt-2 font-mono text-[10px] text-muted">Converted estimate — exact pricing shown at checkout.</p>

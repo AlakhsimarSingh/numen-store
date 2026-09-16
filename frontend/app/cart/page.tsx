@@ -97,7 +97,7 @@ export default function CartPage() {
   // zero unless real data backs it.
   const markdownSavings = lineDisplays.reduce((sum, { item, display, compareAtDisplay }) => {
     if (!compareAtDisplay) return sum;
-    return sum + (compareAtDisplay.price - display.price + tax) * item.qty;
+    return sum + (compareAtDisplay.price - display.price) * item.qty;
   }, 0);
 
   // Shipping is deliberately NOT computed here — it needs a destination
@@ -116,7 +116,15 @@ export default function CartPage() {
   });
   const discounted = Math.max(0, subtotal - discount);
   const totalExcludingShipping = Math.round((discounted + tax) * 100) / 100;
-  const totalSavings = markdownSavings + discount;
+
+  // "Market Value" is the pre-markdown, pre-discount reference price
+  // (subtotal + markdownSavings). "Numen's Value" is what the customer
+  // actually pays before shipping (totalExcludingShipping). The savings
+  // banner is now literally that difference, rather than summing
+  // markdown + discount separately — so it reflects tax too.
+  const marketValue = subtotal + markdownSavings;
+  const numensValue = totalExcludingShipping;
+  const totalSavings = marketValue - numensValue;
 
   // A code (any code — even 0% discount) is now required to proceed past
   // this page, since it's how orders get attributed to a partner business.
@@ -288,9 +296,9 @@ export default function CartPage() {
           )}
           {promoError && <p className="mt-1.5 font-mono text-[11px] text-accent2">{promoError}</p>}
 
-          {/* Combined savings banner: markdown (MRP - price) + coupon
-              discount, shown as one graceful line above the breakdown.
-              Only renders when there's something real to show. */}
+          {/* Combined savings banner: Market Value - Numen's Value, shown
+              as one graceful line above the breakdown. Only renders when
+              there's something real to show. */}
           {totalSavings > 0 && (
             <div className="mt-4 flex items-center gap-2 rounded-xl border border-accent/20 bg-accent/5 px-4 py-2.5">
               <PartyPopper size={15} className="shrink-0 text-accent" />
@@ -305,7 +313,7 @@ export default function CartPage() {
               <div className="flex justify-between text-muted">
                 <span>Market Value</span>
                 <span className="text-muted line-through">
-                  {formatMoney(subtotal + markdownSavings, currency, symbol)}
+                  {formatMoney(marketValue, currency, symbol)}
                 </span>
               </div>
             )}
@@ -323,7 +331,7 @@ export default function CartPage() {
               <span className="text-ink">Numen's Value</span>
               <span className="text-ink">
                 {anyEstimated && <span className="text-muted/70">~</span>}
-                {formatMoney(totalExcludingShipping, currency, symbol)}
+                {formatMoney(numensValue, currency, symbol)}
               </span>
             </div>
             <p className="text-right font-mono text-[9px] text-muted/40">
