@@ -30,7 +30,7 @@ export default async function Home() {
       />
       <CategoryTicker />
       {flashDeal && <FlashDealSection deal={flashDeal} />}
-      <CategoryGrid />
+      <CategoryGrid products={products} />
       <PersonalizedSection products={products} />
       <BestSellersSection products={products} />
       <TestimonialsSection testimonials={testimonials} />
