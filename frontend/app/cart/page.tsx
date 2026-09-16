@@ -126,6 +126,12 @@ export default function CartPage() {
   const numensValue = totalExcludingShipping;
   const totalSavings = marketValue - numensValue;
 
+  // Scale factor to convert each line's raw (pre-discount/tax) price into
+  // its proportional share of Numen's Value, so the per-item prices shown
+  // in the list agree with the "Numen's Value" total in the summary card
+  // instead of just summing to the plain subtotal.
+  const numensValueFactor = subtotal > 0 ? numensValue / subtotal : 1;
+
   // A code (any code — even 0% discount) is now required to proceed past
   // this page, since it's how orders get attributed to a partner business.
   const hasCode = !!promoCode;
@@ -190,15 +196,11 @@ export default function CartPage() {
 
               <div className="min-w-0 flex-1">
                 <p className="truncate font-body text-sm text-ink">{item.name}</p>
-                <p className="mt-1 flex items-baseline gap-1.5 font-mono text-sm text-muted">
-                  {display.estimated && <span className="text-muted/70">~</span>}
-                  <span>{formatMoney(display.price * item.qty, currency, symbol)}</span>
-                  {compareAtDisplay && (
-                    <span className="text-xs text-muted/60 line-through">
-                      {formatMoney(compareAtDisplay.price * item.qty, currency, symbol)}
-                    </span>
-                  )}
-                </p>
+                {compareAtDisplay && (
+                  <p className="mt-0.5 font-mono text-[11px] text-muted/60">
+                    Market Value <span className="line-through">{formatMoney(compareAtDisplay.price, currency, symbol)}</span>
+                  </p>
+                )}
 
                 <div className="mt-3 flex items-center gap-2">
                   <button
@@ -218,8 +220,9 @@ export default function CartPage() {
               </div>
 
               <div className="flex flex-col items-end gap-3">
-                <span className="font-mono text-sm text-ink">
-                  {formatMoney(display.price * item.qty, currency, symbol)}
+                <span className="flex items-baseline gap-1 font-mono text-sm text-ink">
+                  {display.estimated && <span className="text-muted/70">~</span>}
+                  {formatMoney(display.price * item.qty * numensValueFactor, currency, symbol)}
                 </span>
                 <button
                   onClick={() => removeItem(item.productId)}

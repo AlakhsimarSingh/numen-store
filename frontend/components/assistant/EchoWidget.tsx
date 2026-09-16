@@ -95,24 +95,43 @@ export default function EchoWidget() {
       {/* Proactive greeting bubble */}
       <AnimatePresence>
         {showBubble && !isOpen && (
-          <motion.button
+          <motion.div
             initial={{ opacity: 0, y: 12, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.35, ease }}
+            role="button"
+            tabIndex={0}
             onClick={() => {
               setOpen(true);
               setShowBubble(false);
             }}
-            className="max-w-[240px] rounded-2xl rounded-br-md border border-white/10 bg-surface p-4 text-left shadow-2xl"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                setOpen(true);
+                setShowBubble(false);
+              }
+            }}
+            className="relative max-w-[240px] cursor-pointer rounded-2xl rounded-br-md border border-white/10 bg-surface p-4 pr-8 text-left shadow-2xl"
           >
+            <button
+              type="button"
+              aria-label="Dismiss message"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowBubble(false);
+              }}
+              className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full text-muted hover:text-ink"
+            >
+              <X size={12} />
+            </button>
             <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-accent">
               <Sparkles size={11} /> ECHO
             </div>
             <p className="mt-1.5 font-body text-xs leading-relaxed text-ink">
               {messages[messages.length - 1]?.text}
             </p>
-          </motion.button>
+          </motion.div>
         )}
       </AnimatePresence>
 
