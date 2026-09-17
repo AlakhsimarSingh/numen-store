@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Banknote, CreditCard, Loader2, ShieldCheck, Smartphone } from "lucide-react";
+import { CreditCard, Loader2, ShieldCheck, Smartphone } from "lucide-react";
 import CheckoutProgress from "@/components/checkout/CheckoutProgress";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
 import { useCartStore } from "@/src/hooks/useCartStore";
@@ -17,12 +17,11 @@ import { useShallow } from "zustand/react/shallow";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-type Method = "card" | "upi" | "cod";
+type Method = "card" | "upi";
 
 const methods: { id: Method; label: string; icon: typeof CreditCard; desc: string }[] = [
   { id: "card", label: "Card", icon: CreditCard, desc: "Visa, Mastercard, RuPay & more" },
   { id: "upi", label: "UPI", icon: Smartphone, desc: "Pay via UPI ID or QR code" },
-  { id: "cod", label: "Cash on Delivery", icon: Banknote, desc: "Pay when it arrives" },
 ];
 
 export default function PaymentPage() {
@@ -50,7 +49,10 @@ export default function PaymentPage() {
     }))
   );
 
-  const [method, setMethod] = useState<Method>(storedMethod ?? "card");
+  // storedMethod could still be "cod" from a stale persisted session (from
+  // before COD was removed) — fall back to "card" rather than defaulting
+  // into an option that no longer exists on this page.
+  const [method, setMethod] = useState<Method>(storedMethod === "card" || storedMethod === "upi" ? storedMethod : "card");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -75,8 +77,10 @@ export default function PaymentPage() {
 
     // Lock in the real totals right now: weight- and destination-aware
     // shipping (using the shopper's confirmed shipping.zip, not the cart's
-    // optional pincode guess), the current promo discount, and a COD fee
-    // that only applies when the chosen method is actually "cod".
+    // optional pincode guess) and the current promo discount. codFee will
+    // always compute to 0 here since method is never "cod" anymore, but
+    // computeTotals still returns the field, so it's kept in the object
+    // shape rather than special-cased out.
     const subtotal = items.reduce((sum, item) => {
       const display = getDisplayPrice(item, currency, rates);
       return sum + display.price * item.qty;
@@ -121,7 +125,7 @@ export default function PaymentPage() {
           <p className="mt-2 font-body text-sm text-muted">Choose how you&apos;d like to pay.</p>
 
           <div className="mt-8 rounded-2xl border border-white/5 bg-surface p-6 sm:p-8">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {methods.map((m) => {
                 const Icon = m.icon;
                 const active = method === m.id;
@@ -145,32 +149,18 @@ export default function PaymentPage() {
               })}
             </div>
 
-            {(method === "card" || method === "upi") && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease }}
-                className="mt-6 flex items-start gap-3 rounded-xl border border-white/10 bg-bg p-4"
-              >
-                <ShieldCheck size={18} className="mt-0.5 shrink-0 text-accent" />
-                <p className="font-body text-xs text-muted">
-                  You&apos;ll enter your {method === "card" ? "card details" : "UPI ID or scan a QR code"} securely on
-                  the next step via Razorpay. NUMEN never sees or stores your payment details.
-                </p>
-              </motion.div>
-            )}
-
-            {method === "cod" && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease }}
-                className="mt-6 rounded-xl border border-white/10 bg-bg p-4"
-              >
-                <p className="font-body text-sm text-ink">Pay with cash when your order arrives.</p>
-                <p className="mt-1 font-body text-xs text-muted">A small COD handling fee applies at checkout.</p>
-              </motion.div>
-            )}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease }}
+              className="mt-6 flex items-start gap-3 rounded-xl border border-white/10 bg-bg p-4"
+            >
+              <ShieldCheck size={18} className="mt-0.5 shrink-0 text-accent" />
+              <p className="font-body text-xs text-muted">
+                You&apos;ll enter your {method === "card" ? "card details" : "UPI ID or scan a QR code"} securely on
+                the next step via Razorpay. NUMEN never sees or stores your payment details.
+              </p>
+            </motion.div>
 
             <button
               onClick={handleContinue}
