@@ -319,7 +319,7 @@ export default function ReviewPage() {
                 <div className="flex justify-between text-muted"><span>Shipping</span><span className="text-ink">{shippingFee === 0 ? "Free" : formatMoney(shippingFee, currency, symbol)}</span></div>
                 {codFee > 0 && <div className="flex justify-between text-muted"><span>COD fee</span><span className="text-ink">{formatMoney(codFee, currency, symbol)}</span></div>}
                 <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
-                  <span className="text-ink">Numen's Value</span>
+                  <span className="text-ink">Our Cost</span>
                   <span className="text-ink">
                     {anyEstimated && <span className="text-muted/70">~</span>}
                     {formatMoney(total, currency, symbol)}

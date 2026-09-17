@@ -3,7 +3,7 @@ import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Minus, Plus, PartyPopper, ShoppingBag, Store, Tag, Trash2, X } from "lucide-react";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
@@ -38,6 +38,7 @@ export default function CartPage() {
   const [promoError, setPromoError] = useState("");
   const [promoApplying, setPromoApplying] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const showToast = useToastStore((s) => s.show);
   const shippingSettings = useSiteSettingsStore(
@@ -118,7 +119,7 @@ export default function CartPage() {
   const totalExcludingShipping = Math.round((discounted + tax) * 100) / 100;
 
   // "Market Value" is the pre-markdown, pre-discount reference price
-  // (subtotal + markdownSavings). "Numen's Value" is what the customer
+  // (subtotal + markdownSavings). "Our Value" is what the customer
   // actually pays before shipping (totalExcludingShipping). The savings
   // banner is now literally that difference, rather than summing
   // markdown + discount separately — so it reflects tax too.
@@ -127,8 +128,8 @@ export default function CartPage() {
   const totalSavings = marketValue - numensValue;
 
   // Scale factor to convert each line's raw (pre-discount/tax) price into
-  // its proportional share of Numen's Value, so the per-item prices shown
-  // in the list agree with the "Numen's Value" total in the summary card
+  // its proportional share of Our Value, so the per-item prices shown
+  // in the list agree with the "Our Value" total in the summary card
   // instead of just summing to the plain subtotal.
   const numensValueFactor = subtotal > 0 ? numensValue / subtotal : 1;
 
@@ -141,6 +142,12 @@ export default function CartPage() {
     const ok = await applyPromo(promoInput.trim());
     setPromoError(ok ? "" : "That representative signature isn't valid.");
     showToast(ok ? "♥ WELCOME TO NUMEN" : "Invalid representative signature", ok ? "success" : "error");
+    if (ok) {
+      // Minimal glitch-flash celebration on the successful reveal — brief,
+      // self-dismissing, and purely decorative (never blocks input).
+      setShowWelcome(true);
+      window.setTimeout(() => setShowWelcome(false), 1500);
+    }
     setPromoApplying(false);
   }
 
@@ -299,7 +306,7 @@ export default function CartPage() {
           )}
           {promoError && <p className="mt-1.5 font-mono text-[11px] text-accent2">{promoError}</p>}
 
-          {/* Combined savings banner: Market Value - Numen's Value, shown
+          {/* Combined savings banner: Market Value - Our Value, shown
               as one graceful line above the breakdown. Only renders when
               there's something real to show. */}
           {totalSavings > 0 && (
@@ -331,7 +338,7 @@ export default function CartPage() {
               <span className="font-mono text-xs uppercase tracking-wide text-muted">Calculated at checkout</span>
             </div>
             <div className="flex justify-between border-t border-white/5 pt-2 font-mono text-base">
-              <span className="text-ink">Numen's Value</span>
+              <span className="text-ink">Our Cost</span>
               <span className="text-ink">
                 {anyEstimated && <span className="text-muted/70">~</span>}
                 {formatMoney(numensValue, currency, symbol)}
@@ -373,6 +380,95 @@ export default function CartPage() {
       </div>
 
       {pickerOpen && <PartnerPicker onClose={() => setPickerOpen(false)} />}
+
+      {/* Minimal glitch-flash celebration, fired once on a successful
+          signature apply. Purely decorative and non-blocking — it sits
+          above the page for a beat, then dissolves on its own. */}
+      <AnimatePresence>
+        {showWelcome && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center bg-bg/85 backdrop-blur-[2px]"
+          >
+            <div className="glitch-wrap relative text-center">
+              <span className="glitch-layer glitch-base block font-display text-2xl font-bold uppercase tracking-[0.25em] text-ink sm:text-4xl">
+                Welcome to Numen
+              </span>
+              <span
+                aria-hidden
+                className="glitch-layer glitch-a absolute inset-0 block font-display text-2xl font-bold uppercase tracking-[0.25em] text-accent sm:text-4xl"
+              >
+                Welcome to Numen
+              </span>
+              <span
+                aria-hidden
+                className="glitch-layer glitch-b absolute inset-0 block font-display text-2xl font-bold uppercase tracking-[0.25em] text-accent2 sm:text-4xl"
+              >
+                Welcome to Numen
+              </span>
+              <motion.span
+                initial={{ scaleX: 0, opacity: 0 }}
+                animate={{ scaleX: 1, opacity: 1 }}
+                transition={{ delay: 0.35, duration: 0.5, ease }}
+                className="mx-auto mt-4 block h-px w-24 origin-center bg-accent/70"
+              />
+            </div>
+
+            <style jsx>{`
+              .glitch-wrap {
+                display: inline-block;
+              }
+              .glitch-layer {
+                white-space: nowrap;
+              }
+              .glitch-base {
+                position: relative;
+                animation: glitchFlicker 1.3s steps(1, end) 1;
+              }
+              .glitch-a,
+              .glitch-b {
+                opacity: 0;
+                mix-blend-mode: screen;
+              }
+              .glitch-a {
+                animation: glitchShiftA 1.3s steps(1, end) 1;
+              }
+              .glitch-b {
+                animation: glitchShiftB 1.3s steps(1, end) 1;
+              }
+              @keyframes glitchFlicker {
+                0% { opacity: 0; }
+                6% { opacity: 1; }
+                9% { opacity: 0.25; }
+                12% { opacity: 1; }
+                45% { opacity: 1; }
+                48% { opacity: 0.35; }
+                51% { opacity: 1; }
+                100% { opacity: 1; }
+              }
+              @keyframes glitchShiftA {
+                0% { opacity: 0; transform: translate(0, 0); }
+                7% { opacity: 0.85; transform: translate(-4px, 1px); }
+                14% { transform: translate(3px, -1px); }
+                21% { transform: translate(-2px, 0); }
+                28% { opacity: 0.6; transform: translate(0, 0); }
+                100% { opacity: 0; transform: translate(0, 0); }
+              }
+              @keyframes glitchShiftB {
+                0% { opacity: 0; transform: translate(0, 0); }
+                7% { opacity: 0.85; transform: translate(4px, -1px); }
+                14% { transform: translate(-3px, 1px); }
+                21% { transform: translate(2px, 0); }
+                28% { opacity: 0.6; transform: translate(0, 0); }
+                100% { opacity: 0; transform: translate(0, 0); }
+              }
+            `}</style>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
