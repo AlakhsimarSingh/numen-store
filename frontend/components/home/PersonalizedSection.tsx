@@ -17,12 +17,12 @@ export default function PersonalizedSection({ products }: { products: Product[] 
   const byCategory = (slug: string) => products.filter((p) => p.categorySlug === slug);
 
   let list = products.filter((p) => p.isNew);
-  let title = "The Celebrity Edit";
+  let title = "Celebrity choice ☆ Show stopper";
   let subtitle = "Fresh picks, chosen by the stars.";
 
   if (favoriteCategories.length > 0) {
     list = favoriteCategories.flatMap(byCategory);
-    title = user?.name ? `The Celebrity Edit for ${user.name.split(" ")[0]}` : "Celebrity choice ☆ Show stopper";
+    title = user?.name ? `Celebrity choice ☆ Show stopper` : "Celebrity choice ☆ Show stopper";
     subtitle = "Fresh picks, chosen by the stars.";
   } else if (wishlistIds.length > 0) {
     const wishlisted = products.filter((p) => wishlistIds.includes(p.id));
