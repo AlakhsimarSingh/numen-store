@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { BarChart3, Loader2, Plus, Store, Tag, Trash2, X } from "lucide-react";
+import { BarChart3, Loader2, Mail, Pencil, Phone, Plus, Store, Tag, Trash2, User, X } from "lucide-react";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { cn } from "@/src/lib/utils";
 import { createPromoCode, deletePromoCode, fetchPromoCodes, fetchSignatureAnalytics, PromoCode, RepresentativeSignatureAnalytics, updatePromoCode } from "@/src/lib/promoCodes";
@@ -24,6 +24,19 @@ const emptyForm = {
   publiclyListed: false,
 };
 
+// Same shape as emptyForm minus `code` — editing never touches the code
+// itself, it's the primary key and orders are already attributed against
+// it, so changing it here would silently break that attribution.
+const emptyEditForm = {
+  percent: "10",
+  businessName: "",
+  contactName: "",
+  contactEmail: "",
+  contactPhone: "",
+  description: "",
+  publiclyListed: false,
+};
+
 export default function AdminPromotionsPage() {
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +47,10 @@ export default function AdminPromotionsPage() {
   const [saving, setSaving] = useState(false);
   const [analytics, setAnalytics] = useState<RepresentativeSignatureAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  const [editing, setEditing] = useState<PromoCode | null>(null);
+  const [editForm, setEditForm] = useState(emptyEditForm);
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,6 +145,51 @@ export default function AdminPromotionsPage() {
     }
   }
 
+  function openEdit(p: PromoCode) {
+    setEditing(p);
+    setEditForm({
+      percent: String(p.percent),
+      businessName: p.businessName ?? "",
+      contactName: p.contactName ?? "",
+      contactEmail: p.contactEmail ?? "",
+      contactPhone: p.contactPhone ?? "",
+      description: p.description ?? "",
+      publiclyListed: p.publiclyListed,
+    });
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    if (!editForm.businessName.trim() || editForm.percent === "") return;
+
+    const percent = parseFloat(editForm.percent);
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+      showToast("Percent must be between 0 and 100", "error");
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      const updated = await updatePromoCode(editing.code, {
+        percent,
+        businessName: editForm.businessName.trim(),
+        contactName: editForm.contactName.trim() || null,
+        contactEmail: editForm.contactEmail.trim() || null,
+        contactPhone: editForm.contactPhone.trim() || null,
+        description: editForm.description.trim() || null,
+        publiclyListed: editForm.publiclyListed,
+      });
+      setPromoCodes((prev) => prev.map((x) => (x.code === editing.code ? { ...x, ...updated } : x)));
+      showToast("Representative signature updated");
+      setEditing(null);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to update representative signature", "error");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -161,15 +223,46 @@ export default function AdminPromotionsPage() {
                 <Tag size={15} className="text-accent" />
                 <span className="font-mono text-sm text-ink">{p.code}</span>
               </div>
-              <button onClick={() => handleDelete(p.code)} className="text-muted hover:text-accent2">
-                <Trash2 size={14} />
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={() => openEdit(p)} aria-label="Edit representative signature" className="text-muted hover:text-accent">
+                  <Pencil size={14} />
+                </button>
+                <button onClick={() => handleDelete(p.code)} aria-label="Delete representative signature" className="text-muted hover:text-accent2">
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
             <p className="mt-2 flex items-center gap-1.5 font-body text-sm font-semibold text-ink">
               <Store size={13} className="text-muted" /> {p.businessName || "Unnamed partner"}
             </p>
             <p className="mt-1 font-display text-2xl font-bold text-ink">{p.percent}% off</p>
-            <p className="mt-1 font-body text-xs text-muted">
+            {p.description && <p className="mt-1.5 font-body text-xs text-muted">{p.description}</p>}
+
+            {/* Contact details — previously collected in the create form
+                but never surfaced back on the card, so there was no way to
+                see who to reach out to without going into the database. */}
+            {(p.contactName || p.contactEmail || p.contactPhone) && (
+              <div className="mt-3 space-y-1 border-t border-white/5 pt-3">
+                {p.contactName && (
+                  <p className="flex items-center gap-1.5 font-body text-xs text-muted">
+                    <User size={12} className="shrink-0 text-muted" /> {p.contactName}
+                  </p>
+                )}
+                {p.contactEmail && (
+                  <p className="flex items-center gap-1.5 font-body text-xs text-muted">
+                    <Mail size={12} className="shrink-0 text-muted" />
+                    <span className="truncate">{p.contactEmail}</span>
+                  </p>
+                )}
+                {p.contactPhone && (
+                  <p className="flex items-center gap-1.5 font-body text-xs text-muted">
+                    <Phone size={12} className="shrink-0 text-muted" /> {p.contactPhone}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <p className="mt-3 font-body text-xs text-muted">
               Used {p.usageCount} time{p.usageCount !== 1 ? "s" : ""}
             </p>
             <p className="mt-0.5 font-body text-xs text-muted">{formatINR(p.totalSubtotalINR)} in orders</p>
@@ -370,6 +463,117 @@ export default function AdminPromotionsPage() {
               >
                 {saving && <Loader2 size={16} className="animate-spin" />}
                 {saving ? "Creating…" : "Create Signature"}
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {editing && (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-bg/80 backdrop-blur-sm px-4"
+          onClick={() => setEditing(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.25, ease }}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85vh] w-full max-w-sm overflow-y-auto rounded-2xl border border-white/10 bg-surface p-6"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-lg font-bold text-ink">Edit Representative Signature</h3>
+              <button onClick={() => setEditing(null)} className="text-muted hover:text-ink">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="mt-5 space-y-4">
+              <div>
+                <label className="mb-1.5 block font-body text-xs text-muted">Code</label>
+                <input
+                  value={editing.code}
+                  disabled
+                  readOnly
+                  className="w-full cursor-not-allowed rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-muted opacity-60"
+                />
+                <p className="mt-1 font-body text-[11px] text-muted">
+                  Code can&apos;t be changed — orders are already attributed against it. Delete and recreate if it
+                  truly needs to change.
+                </p>
+              </div>
+              <div>
+                <label className="mb-1.5 block font-body text-xs text-muted">Business name</label>
+                <input
+                  value={editForm.businessName}
+                  onChange={(e) => setEditForm({ ...editForm, businessName: e.target.value })}
+                  placeholder="Acme Retailers"
+                  className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block font-body text-xs text-muted">Discount % (0 for attribution-only)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={editForm.percent}
+                  onChange={(e) => setEditForm({ ...editForm, percent: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-mono text-sm text-ink focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block font-body text-xs text-muted">Description (shown to customers if public)</label>
+                <input
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  placeholder="Streetwear boutique in Ludhiana"
+                  className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink placeholder:text-muted focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block font-body text-xs text-muted">Contact name</label>
+                  <input
+                    value={editForm.contactName}
+                    onChange={(e) => setEditForm({ ...editForm, contactName: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink focus:outline-none focus:border-accent/50"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block font-body text-xs text-muted">Contact phone</label>
+                  <input
+                    value={editForm.contactPhone}
+                    onChange={(e) => setEditForm({ ...editForm, contactPhone: e.target.value })}
+                    className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink focus:outline-none focus:border-accent/50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block font-body text-xs text-muted">Contact email</label>
+                <input
+                  value={editForm.contactEmail}
+                  onChange={(e) => setEditForm({ ...editForm, contactEmail: e.target.value })}
+                  className="w-full rounded-xl border border-white/10 bg-bg px-4 py-2.5 font-body text-sm text-ink focus:outline-none focus:border-accent/50"
+                />
+              </div>
+              <label className="flex items-center gap-2 font-body text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={editForm.publiclyListed}
+                  onChange={(e) => setEditForm({ ...editForm, publiclyListed: e.target.checked })}
+                  className="h-4 w-4 rounded border-white/10 bg-bg accent-[var(--color-accent)]"
+                />
+                List in the customer-facing &quot;connect with a seller&quot; picker
+              </label>
+
+              <button
+                type="submit"
+                disabled={editSaving}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-accent py-3 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.01] disabled:opacity-70"
+              >
+                {editSaving && <Loader2 size={16} className="animate-spin" />}
+                {editSaving ? "Saving…" : "Save Changes"}
               </button>
             </form>
           </motion.div>

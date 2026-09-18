@@ -22,7 +22,7 @@ export default function PersonalizedSection({ products }: { products: Product[] 
 
   if (favoriteCategories.length > 0) {
     list = favoriteCategories.flatMap(byCategory);
-    title = user?.name ? `The Celebrity Edit for ${user.name.split(" ")[0]}` : "The Celebrity Edit";
+    title = user?.name ? `The Celebrity Edit for ${user.name.split(" ")[0]}` : "Celebrity choice ☆ Show stopper";
     subtitle = "Fresh picks, chosen by the stars.";
   } else if (wishlistIds.length > 0) {
     const wishlisted = products.filter((p) => wishlistIds.includes(p.id));
