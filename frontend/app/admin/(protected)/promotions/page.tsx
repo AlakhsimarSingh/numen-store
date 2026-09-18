@@ -174,10 +174,10 @@ export default function AdminPromotionsPage() {
       const updated = await updatePromoCode(editing.code, {
         percent,
         businessName: editForm.businessName.trim(),
-        contactName: editForm.contactName.trim() || null,
-        contactEmail: editForm.contactEmail.trim() || null,
-        contactPhone: editForm.contactPhone.trim() || null,
-        description: editForm.description.trim() || null,
+        contactName: editForm.contactName.trim() || undefined,
+        contactEmail: editForm.contactEmail.trim() || undefined,
+        contactPhone: editForm.contactPhone.trim() || undefined,
+        description: editForm.description.trim() || undefined,
         publiclyListed: editForm.publiclyListed,
       });
       setPromoCodes((prev) => prev.map((x) => (x.code === editing.code ? { ...x, ...updated } : x)));
