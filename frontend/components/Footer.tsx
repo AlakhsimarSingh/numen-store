@@ -1,13 +1,15 @@
 "use client";
 import { usePathname } from "next/navigation";
-import Link from "next/link";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink } from "lucide-react";
-import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
+import { ExternalLink, Phone } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
+
+const CONTACT_PHONE_DISPLAY = "+91 87288 82880";
+const CONTACT_PHONE_TEL = "+918728882880"; // tel: link — keeps the leading + for international dialing
+const CONTACT_PHONE_WHATSAPP = "918728882880"; // wa.me — no +, no spaces
 
 function InstagramMark() {
   return (
@@ -94,14 +96,13 @@ function SocialLinks() {
         const Icon = group.icon;
         const isOpen = open === group.key;
 
-        // First icon sits near the left viewport edge — anchor its popover
-        // left instead of centered, so it expands rightward into available
-        // space rather than overflowing off-screen. Last icon mirrors this
-        // on the right. Only a middle icon can safely stay centered.
+        // Centered layout now, so every popover can safely stay centered
+        // under its trigger — no left/right viewport-edge overflow risk
+        // like when this sat at the far left of a multi-column footer.
         const isFirst = i === 0;
         const isLast = i === lastIndex;
-        const menuAnchorClass = isFirst ? "left-0" : isLast ? "right-0" : "left-1/2 -translate-x-1/2";
-        const arrowAnchorClass = isFirst ? "left-4" : isLast ? "right-4" : "left-1/2 -translate-x-1/2";
+        const menuAnchorClass = "left-1/2 -translate-x-1/2";
+        const arrowAnchorClass = "left-1/2 -translate-x-1/2";
 
         return (
           <div key={group.key} className="relative">
@@ -109,7 +110,7 @@ function SocialLinks() {
               onClick={() => setOpen(isOpen ? null : group.key)}
               aria-label={group.platform}
               className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-full border transition-colors",
+                "flex h-10 w-10 items-center justify-center rounded-full border transition-colors",
                 isOpen ? "border-accent/60 text-accent" : "border-white/10 text-muted hover:border-accent/50 hover:text-accent"
               )}
             >
@@ -150,7 +151,7 @@ function SocialLinks() {
                     <span
                       className={cn(
                         "absolute -bottom-1.5 h-3 w-3 rotate-45 border-b border-r border-white/10 bg-bg",
-                        isFirst || isLast ? arrowAnchorClass : "left-1/2 -translate-x-1/2"
+                        arrowAnchorClass
                       )}
                     />
                   </motion.div>
@@ -164,31 +165,41 @@ function SocialLinks() {
   );
 }
 
-export default function Footer() {
-  const siteName = useSiteSettingsStore((s) => s.siteName);
+function ContactButtons() {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      <a
+        href={`tel:${CONTACT_PHONE_TEL}`}
+        className="flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 font-body text-sm text-ink/80 transition-colors hover:border-accent/50 hover:text-accent"
+      >
+        <Phone size={15} />
+        {CONTACT_PHONE_DISPLAY}
+      </a>
+      <a
+        href={`https://wa.me/${CONTACT_PHONE_WHATSAPP}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
+      >
+        <WhatsAppMark />
+        WhatsApp Us
+      </a>
+    </div>
+  );
+}
 
+export default function Footer() {
   const pathname = usePathname();
   if (pathname?.startsWith("/admin")) return null;
 
-  const displayName = siteName.replace(".", "");
-
   return (
     <footer className="border-t border-white/5 bg-surface">
-      <div className="mx-auto max-w-7xl px-6 py-12">
-        <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Link href="/" className="font-display text-2xl font-bold text-ink">
-              {displayName}<span className="text-accent">.</span>
-            </Link>
-            <p className="mt-3 max-w-xs font-body text-sm text-muted">
-              Premium fits, honest prices. New drops every week across 26 categories.
-            </p>
-          </div>
-          <SocialLinks />
-        </div>
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-8 px-6 py-12">
+        <ContactButtons />
+        <SocialLinks />
 
-        <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/5 pt-5 sm:flex-row">
-          <p className="font-mono text-xs text-muted">© {new Date().getFullYear()} {displayName}. All rights reserved.</p>
+        <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-white/5 pt-6 sm:flex-row">
+          <p className="font-mono text-xs text-muted">© {new Date().getFullYear()} All rights reserved.</p>
           <div className="flex gap-6">
             <a href="/privacy" className="font-mono text-xs text-muted hover:text-ink">Privacy</a>
             <a href="/terms" className="font-mono text-xs text-muted hover:text-ink">Terms</a>
