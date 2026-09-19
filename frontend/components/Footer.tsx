@@ -2,18 +2,16 @@
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink, Phone } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-const CONTACT_PHONE_DISPLAY = "+91 87288 82880";
-const CONTACT_PHONE_TEL = "+918728882880"; // tel: link — keeps the leading + for international dialing
 const CONTACT_PHONE_WHATSAPP = "918728882880"; // wa.me — no +, no spaces
 
 function InstagramMark() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <rect x="3" y="3" width="18" height="18" rx="5.5" />
       <circle cx="12" cy="12" r="4.2" />
       <circle cx="17.15" cy="6.85" r="1.1" fill="currentColor" stroke="none" />
@@ -23,7 +21,7 @@ function InstagramMark() {
 
 function WhatsAppMark() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <path d="M6.5 17.5 4 20l2.6-2.4A8 8 0 1 1 9.3 19Z" />
       <path d="M9 9.7c0 3 2.3 5.3 5.3 5.3.4 0 .8-.3.8-.7v-1.2c0-.3-.2-.6-.5-.7l-1.6-.5c-.3-.1-.6 0-.7.2l-.3.5c-1-.5-1.9-1.4-2.4-2.4l.5-.3c.2-.1.3-.4.2-.7l-.5-1.6c-.1-.3-.4-.5-.7-.5H8.7c-.4 0-.7.4-.7.8Z" fill="currentColor" stroke="none" />
     </svg>
@@ -32,7 +30,7 @@ function WhatsAppMark() {
 
 function TelegramMark() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
       <circle cx="12" cy="12" r="9" />
       <path d="m7 12.3 4.3 1.6 1.4 3.3 2.3-9.7-9.5 3.6 2.5.9 1 3.1" strokeLinejoin="round" />
     </svg>
@@ -91,90 +89,91 @@ function SocialLinks() {
   const lastIndex = socialGroups.length - 1;
 
   return (
-    <div className="flex gap-3">
-      {socialGroups.map((group, i) => {
-        const Icon = group.icon;
-        const isOpen = open === group.key;
+    <div className="flex flex-col items-center gap-3">
+      <p className="font-mono text-xs uppercase tracking-widest text-muted">Social Media</p>
+      <div className="flex gap-4">
+        {socialGroups.map((group, i) => {
+          const Icon = group.icon;
+          const isOpen = open === group.key;
 
-        // Centered layout now, so every popover can safely stay centered
-        // under its trigger — no left/right viewport-edge overflow risk
-        // like when this sat at the far left of a multi-column footer.
-        const isFirst = i === 0;
-        const isLast = i === lastIndex;
-        const menuAnchorClass = "left-1/2 -translate-x-1/2";
-        const arrowAnchorClass = "left-1/2 -translate-x-1/2";
+          // Centered layout now, so every popover can safely stay centered
+          // under its trigger — no left/right viewport-edge overflow risk
+          // like when this sat at the far left of a multi-column footer.
+          const isFirst = i === 0;
+          const isLast = i === lastIndex;
+          const menuAnchorClass = "left-1/2 -translate-x-1/2";
+          const arrowAnchorClass = "left-1/2 -translate-x-1/2";
 
-        return (
-          <div key={group.key} className="relative">
-            <button
-              onClick={() => setOpen(isOpen ? null : group.key)}
-              aria-label={group.platform}
-              className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-full border transition-colors",
-                isOpen ? "border-accent/60 text-accent" : "border-white/10 text-muted hover:border-accent/50 hover:text-accent"
-              )}
-            >
-              <Icon />
-            </button>
+          return (
+            <div key={group.key} className="relative">
+              <button
+                onClick={() => setOpen(isOpen ? null : group.key)}
+                aria-label={group.platform}
+                className={cn(
+                  "flex h-12 w-12 items-center justify-center rounded-full border transition-colors",
+                  isOpen
+                    ? "border-accent bg-accent/10 text-accent"
+                    : "border-white/20 text-ink/80 hover:border-accent hover:text-accent"
+                )}
+              >
+                <Icon />
+              </button>
 
-            <AnimatePresence>
-              {isOpen && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setOpen(null)} />
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                    transition={{ duration: 0.18, ease }}
-                    className={cn(
-                      "absolute bottom-full z-40 mb-3 w-52 overflow-hidden rounded-2xl border border-white/10 bg-bg shadow-2xl",
-                      menuAnchorClass
-                    )}
-                  >
-                    <p className="border-b border-white/5 px-4 py-2.5 font-mono text-[10px] uppercase tracking-widest text-muted">
-                      {group.platform}
-                    </p>
-                    <div className="py-1">
-                      {group.links.map((link) => (
-                        <a
-                          key={link.href}
-                          href={link.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-between px-4 py-2.5 font-body text-xs text-ink/80 transition-colors hover:bg-surface2 hover:text-accent"
-                        >
-                          {link.label}
-                          <ExternalLink size={11} className="shrink-0 text-muted" />
-                        </a>
-                      ))}
-                    </div>
-                    <span
+              <AnimatePresence>
+                {isOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setOpen(null)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                      transition={{ duration: 0.18, ease }}
                       className={cn(
-                        "absolute -bottom-1.5 h-3 w-3 rotate-45 border-b border-r border-white/10 bg-bg",
-                        arrowAnchorClass
+                        "absolute bottom-full z-40 mb-3 w-52 overflow-hidden rounded-2xl border border-white/10 bg-bg shadow-2xl",
+                        menuAnchorClass
                       )}
-                    />
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })}
+                    >
+                      <p className="border-b border-white/5 px-4 py-2.5 font-mono text-[10px] uppercase tracking-widest text-muted">
+                        {group.platform}
+                      </p>
+                      <div className="py-1">
+                        {group.links.map((link) => (
+                          <a
+                            key={link.href}
+                            href={link.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between px-4 py-2.5 font-body text-xs text-ink/80 transition-colors hover:bg-surface2 hover:text-accent"
+                          >
+                            {link.label}
+                            <ExternalLink size={11} className="shrink-0 text-muted" />
+                          </a>
+                        ))}
+                      </div>
+                      <span
+                        className={cn(
+                          "absolute -bottom-1.5 h-3 w-3 rotate-45 border-b border-r border-white/10 bg-bg",
+                          arrowAnchorClass
+                        )}
+                      />
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function ContactButtons() {
+function ContactPrompt() {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3">
-      <a
-        href={`tel:${CONTACT_PHONE_TEL}`}
-        className="flex items-center gap-2 rounded-full border border-white/10 px-5 py-2.5 font-body text-sm text-ink/80 transition-colors hover:border-accent/50 hover:text-accent"
-      >
-        <Phone size={15} />
-        {CONTACT_PHONE_DISPLAY}
-      </a>
+    <div className="flex flex-col items-center gap-3 text-center">
+      <p className="max-w-xs font-body text-sm text-muted">
+        Want a live quality review of a product before you buy? Call us on WhatsApp.
+      </p>
       <a
         href={`https://wa.me/${CONTACT_PHONE_WHATSAPP}`}
         target="_blank"
@@ -182,7 +181,7 @@ function ContactButtons() {
         className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
       >
         <WhatsAppMark />
-        WhatsApp Us
+        Call Us on WhatsApp
       </a>
     </div>
   );
@@ -195,7 +194,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-white/5 bg-surface">
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-8 px-6 py-12">
-        <ContactButtons />
+        <ContactPrompt />
         <SocialLinks />
 
         <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-white/5 pt-6 sm:flex-row">
