@@ -101,33 +101,52 @@ const circleBase =
 const circleIdle =
   "border-white/15 text-ink/70 hover:border-accent hover:text-accent";
 
-function TelegramMenu() {
-  const [open, setOpen] = useState(false);
+function SocialLinks() {
+  const [telegramOpen, setTelegramOpen] = useState(false);
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Telegram channels"
-        aria-expanded={open}
-        className={cn(
-          circleBase,
-          open ? "border-accent bg-accent/10 text-accent" : circleIdle
-        )}
-      >
-        <TelegramMark />
-      </button>
+    // The popover is anchored to the centered icon row (not to the Telegram
+    // icon at its right end), so it stays centered on screen and can't spill
+    // past the right edge.
+    <div className="flex flex-col items-center gap-2">
+      <p className="font-mono text-sm uppercase tracking-widest text-muted">Social Media</p>
+      <div className="relative flex items-center gap-3">
+        {directLinks.map(({ label, href, icon: Icon }) => (
+          <a
+            key={href}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={label}
+            title={label}
+            className={cn(circleBase, circleIdle)}
+          >
+            <Icon />
+          </a>
+        ))}
+
+        <button
+          onClick={() => setTelegramOpen((v) => !v)}
+          aria-label="Telegram channels"
+          aria-expanded={telegramOpen}
+          className={cn(
+            circleBase,
+            telegramOpen ? "border-accent bg-accent/10 text-accent" : circleIdle
+          )}
+        >
+          <TelegramMark />
+        </button>
 
       <AnimatePresence>
-        {open && (
+        {telegramOpen && (
           <>
-            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-30" onClick={() => setTelegramOpen(false)} />
             <motion.div
               initial={{ opacity: 0, y: 8, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
               transition={{ duration: 0.18, ease }}
-              className="absolute bottom-full left-1/2 z-40 mb-3 w-[17rem] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-bg shadow-2xl"
+              className="absolute bottom-full left-1/2 z-40 mb-3 w-[min(17rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-bg shadow-2xl"
             >
               <p className="border-b border-white/5 px-4 py-2.5 font-mono text-[10px] uppercase tracking-widest text-muted">
                 Telegram
@@ -139,7 +158,7 @@ function TelegramMenu() {
                     href={c.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => setOpen(false)}
+                    onClick={() => setTelegramOpen(false)}
                     className="flex items-center justify-between rounded-lg px-3 py-2 font-body text-xs text-ink/80 transition-colors hover:bg-surface2 hover:text-accent"
                   >
                     <span className="truncate">{c.label}</span>
@@ -151,29 +170,6 @@ function TelegramMenu() {
           </>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function SocialLinks() {
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <p className="font-mono text-sm uppercase tracking-widest text-muted">Social Media</p>
-      <div className="flex items-center gap-3">
-      {directLinks.map(({ label, href, icon: Icon }) => (
-        <a
-          key={href}
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={label}
-          title={label}
-          className={cn(circleBase, circleIdle)}
-        >
-          <Icon />
-        </a>
-      ))}
-      <TelegramMenu />
       </div>
     </div>
   );
