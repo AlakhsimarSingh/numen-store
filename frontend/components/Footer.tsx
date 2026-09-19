@@ -89,8 +89,8 @@ function SocialLinks() {
   const lastIndex = socialGroups.length - 1;
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <p className="font-mono text-xs uppercase tracking-widest text-muted">Social Media</p>
+    <div className="flex flex-col items-center gap-2">
+      <p className="font-mono text-sm uppercase tracking-widest text-muted">Social Media</p>
       <div className="flex gap-4">
         {socialGroups.map((group, i) => {
           const Icon = group.icon;
@@ -170,21 +170,21 @@ function SocialLinks() {
 
 function ContactPrompt() {
   return (
-    <div className="flex flex-col items-center gap-3 text-center">
-      <p className="max-w-xs font-body text-sm text-muted">
+    <div className="flex flex-col items-center gap-1.5 text-center">
+      <p className="max-w-sm font-body text-base text-ink/80">
         For LIVE QUALITY REVIEW about ANYTHING.
       </p>
-      <p className="max-w-xs font-body text-sm text-muted">
+      <p className="max-w-sm font-body text-base text-ink/80">
         Call us on WHATSAPP direct.
       </p>
       <a
         href={`https://wa.me/${CONTACT_PHONE_WHATSAPP}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
+        className="mt-2 flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
       >
         <WhatsAppMark />
-        Call Us on WhatsApp
+        Call/Message on WhatsApp
       </a>
     </div>
   );
@@ -196,11 +196,11 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-white/5 bg-surface">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-8 px-6 py-12">
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-5 px-6 py-8">
         <ContactPrompt />
         <SocialLinks />
 
-        <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-white/5 pt-6 sm:flex-row">
+        <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-white/5 pt-5 sm:flex-row">
           <p className="font-mono text-xs text-muted">© {new Date().getFullYear()} All rights reserved.</p>
           <div className="flex gap-6">
             <a href="/privacy" className="font-mono text-xs text-muted hover:text-ink">Privacy</a>
