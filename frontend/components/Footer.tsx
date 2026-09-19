@@ -2,18 +2,12 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ExternalLink } from "lucide-react";
 import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import { cn } from "@/src/lib/utils";
 
 const ease = [0.16, 1, 0.3, 1] as const;
-
-const helpLinks = [
-  { label: "Track Order", href: "/account/orders" },
-  { label: "FAQs", href: "/faq" },
-  { label: "Customer Care", href: "/contact" },
-];
 
 function InstagramMark() {
   return (
@@ -171,16 +165,7 @@ function SocialLinks() {
 }
 
 export default function Footer() {
-  const [email, setEmail] = useState("");
-  const [subscribed, setSubscribed] = useState(false);
   const siteName = useSiteSettingsStore((s) => s.siteName);
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email) return;
-    setSubscribed(true);
-    setEmail("");
-  }
 
   const pathname = usePathname();
   if (pathname?.startsWith("/admin")) return null;
@@ -190,7 +175,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-white/5 bg-surface">
       <div className="mx-auto max-w-7xl px-6 py-12">
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-[1.3fr_1fr_1.3fr]">
+        <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <Link href="/" className="font-display text-2xl font-bold text-ink">
               {displayName}<span className="text-accent">.</span>
@@ -198,67 +183,8 @@ export default function Footer() {
             <p className="mt-3 max-w-xs font-body text-sm text-muted">
               Premium fits, honest prices. New drops every week across 26 categories.
             </p>
-            <div className="mt-5">
-              <SocialLinks />
-            </div>
           </div>
-
-          <div>
-            <h4 className="font-mono text-xs uppercase tracking-widest text-muted">Help</h4>
-            <ul className="mt-3 space-y-2.5">
-              {helpLinks.map((item) => (
-                <li key={item.href}>
-                  <Link href={item.href} className="font-body text-sm text-ink/80 transition-colors hover:text-accent">
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="font-mono text-xs uppercase tracking-widest text-muted">Stay in the loop</h4>
-            <p className="mt-3 font-body text-sm text-muted">
-              Drop your email, get first access to new arrivals.
-            </p>
-            <AnimatePresence mode="wait">
-              {subscribed ? (
-                <motion.p
-                  key="done"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, ease }}
-                  className="mt-3 font-mono text-xs text-accent"
-                >
-                  You&apos;re on the list.
-                </motion.p>
-              ) : (
-                <motion.form
-                  key="form"
-                  onSubmit={handleSubmit}
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="mt-3 flex items-center gap-2 rounded-full border border-white/10 bg-bg p-1.5 pl-4"
-                >
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@email.com"
-                    className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none"
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Subscribe"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-bg transition-transform hover:scale-105"
-                  >
-                    <ArrowRight size={14} strokeWidth={2.5} />
-                  </button>
-                </motion.form>
-              )}
-            </AnimatePresence>
-          </div>
+          <SocialLinks />
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/5 pt-5 sm:flex-row">
