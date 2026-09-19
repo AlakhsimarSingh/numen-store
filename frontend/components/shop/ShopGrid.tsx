@@ -12,17 +12,31 @@ import { buildPriceBands } from "@/src/lib/priceBands";
 import { DesktopFilterAside, MobileFilterButton } from "@/components/shop/FilterSidebar";
 import { SortMenu, type SortOption } from "@/components/shop/SortMenu";
 
-type SortKey = "featured" | "newest" | "price-asc" | "price-desc" | "rating" | "discount" | "name-asc";
+type SortKey =
+  | "featured"
+  | "new-to-old"
+  | "old-to-new"
+  | "price-asc"
+  | "price-desc"
+  | "rating"
+  | "discount"
+  | "name-asc";
 
 const SORT_OPTIONS: SortOption<SortKey>[] = [
   { value: "featured", label: "Featured" },
-  { value: "newest", label: "Newest Arrivals" },
+  { value: "new-to-old", label: "New to Old" },
+  { value: "old-to-new", label: "Old to New" },
   { value: "price-asc", label: "Price: Low to High" },
   { value: "price-desc", label: "Price: High to Low" },
   { value: "rating", label: "Top Rated" },
   { value: "discount", label: "Biggest Discount" },
   { value: "name-asc", label: "Name: A to Z" },
 ];
+
+const SORT_KEYS = SORT_OPTIONS.map((o) => o.value);
+function isSortKey(v: string | null): v is SortKey {
+  return !!v && (SORT_KEYS as string[]).includes(v);
+}
 
 // Rendering all 440+ products at once (each with its own Image + framer
 // motion mount) is what was making the page laggy. Paginating keeps the
@@ -48,28 +62,101 @@ export default function ShopGrid({
   const symbols = useCurrencyStore((s) => s.symbols);
   const symbol = symbols[currency] ?? currency;
 
-  const [sortBy, setSortBy] = useState<SortKey>("featured");
-  const [activeCategory, setActiveCategory] = useState<string | "all">("all");
-  const [activeSizes, setActiveSizes] = useState<string[]>([]);
-  const [priceBand, setPriceBand] = useState(0);
-  const [newOnly, setNewOnly] = useState(urlFilter === "new");
+  // Every filter/sort now initializes straight from the URL on first
+  // render, so a pasted link reproduces the exact same view immediately —
+  // no flash of the default state before a useEffect corrects it.
+  const [sortBy, setSortByState] = useState<SortKey>(() => {
+    const s = searchParams.get("sort");
+    return isSortKey(s) ? s : "featured";
+  });
+  const [activeCategory, setActiveCategoryState] = useState<string | "all">(
+    () => searchParams.get("category") ?? "all"
+  );
+  const [activeSizes, setActiveSizesState] = useState<string[]>(() => {
+    const s = searchParams.get("sizes");
+    return s ? s.split(",").filter(Boolean) : [];
+  });
+  const [priceBand, setPriceBandState] = useState(() => {
+    const p = parseInt(searchParams.get("price") ?? "0", 10);
+    return Number.isFinite(p) && p >= 0 ? p : 0;
+  });
+  const [newOnly, setNewOnlyState] = useState(
+    () => searchParams.get("filter") === "new" || searchParams.get("new") === "1"
+  );
   const [page, setPage] = useState(() => {
     const p = parseInt(searchParams.get("page") ?? "1", 10);
     return Number.isFinite(p) && p > 0 ? p : 1;
   });
 
   useEffect(() => {
-    if (urlFilter === "new") setNewOnly(true);
+    if (urlFilter === "new") setNewOnlyState(true);
   }, [urlFilter]);
 
+  // Single place that writes to the URL — every filter setter below calls
+  // this with just the key(s) it owns, so the query string always mirrors
+  // current state without each setter needing to rebuild the whole thing.
+  function updateParams(updates: Record<string, string | null>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === null || value === "") params.delete(key);
+      else params.set(key, value);
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function setSortBy(v: SortKey) {
+    setSortByState(v);
+    updateParams({ sort: v === "featured" ? null : v });
+  }
+
+  function setActiveCategory(slug: string) {
+    setActiveCategoryState(slug);
+    updateParams({ category: slug === "all" ? null : slug });
+  }
+
   function toggleSize(size: string) {
-    setActiveSizes((prev) => (prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]));
+    setActiveSizesState((prev) => {
+      const next = prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size];
+      updateParams({ sizes: next.length > 0 ? next.join(",") : null });
+      return next;
+    });
+  }
+
+  function setPriceBand(i: number) {
+    setPriceBandState(i);
+    updateParams({ price: i === 0 ? null : String(i) });
+  }
+
+  function setNewOnly(v: boolean) {
+    setNewOnlyState(v);
+    // "filter=new" is the pre-existing param other pages (e.g. a homepage
+    // "New Drops" link) already generate — keep writing to that same key
+    // rather than introducing a second, redundant "new=1" param.
+    updateParams({ filter: v ? "new" : null });
   }
 
   const availableSizes = useMemo(() => {
     const set = new Set<string>();
     for (const p of initialProducts) p.sizes?.forEach((s) => set.add(s));
     return Array.from(set).sort();
+  }, [initialProducts]);
+
+  // The backend already returns products ordered newest-first
+  // (orderBy: { createdAt: "desc" }) — but that raw createdAt date isn't
+  // exposed on the Product type sent to the frontend. Rather than sort by
+  // a field that doesn't exist, this captures each product's position in
+  // the array AS RECEIVED as a stand-in for recency: index 0 is newest.
+  // This only stays correct as long as the backend keeps that ordering
+  // and nothing reorders initialProducts before it reaches this
+  // component. If that's ever not guaranteed, ask for createdAt to be
+  // added to serializeProduct() instead and this can sort on the real
+  // date directly.
+  const recencyRankById = useMemo(() => {
+    const map: Record<string, number> = {};
+    initialProducts.forEach((p, i) => {
+      map[p.id] = i;
+    });
+    return map;
   }, [initialProducts]);
 
   // Every product's price+compareAt resolved to the currently displayed
@@ -109,6 +196,7 @@ export default function ShopGrid({
   // stale cutoff.
   useEffect(() => {
     setPriceBand(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currency]);
 
   const filtered = useMemo(() => {
@@ -131,8 +219,11 @@ export default function ShopGrid({
     if (newOnly) list = list.filter((p) => p.isNew);
 
     switch (sortBy) {
-      case "newest":
-        list.sort((a, b) => Number(b.isNew) - Number(a.isNew) || b.rating - a.rating);
+      case "new-to-old":
+        list.sort((a, b) => (recencyRankById[a.id] ?? 0) - (recencyRankById[b.id] ?? 0));
+        break;
+      case "old-to-new":
+        list.sort((a, b) => (recencyRankById[b.id] ?? 0) - (recencyRankById[a.id] ?? 0));
         break;
       case "price-asc":
         list.sort((a, b) => (priceById[a.id] ?? 0) - (priceById[b.id] ?? 0));
@@ -165,12 +256,14 @@ export default function ShopGrid({
     displayById,
     newOnly,
     showCategoryFilter,
+    recencyRankById,
   ]);
 
   // Any filter/sort change invalidates the current page — jump back to 1
   // rather than risk landing on a now-empty page.
   useEffect(() => {
     setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, activeCategory, activeSizes, priceBand, newOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -180,18 +273,16 @@ export default function ShopGrid({
   function goToPage(p: number) {
     const next = Math.min(Math.max(1, p), totalPages);
     setPage(next);
-    const params = new URLSearchParams(searchParams.toString());
-    if (next > 1) params.set("page", String(next));
-    else params.delete("page");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    updateParams({ page: next > 1 ? String(next) : null });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function resetFilters() {
-    setActiveCategory("all");
-    setActiveSizes([]);
-    setPriceBand(0);
-    setNewOnly(false);
+    setActiveCategoryState("all");
+    setActiveSizesState([]);
+    setPriceBandState(0);
+    setNewOnlyState(false);
+    updateParams({ category: null, sizes: null, price: null, filter: null });
   }
 
   const filterProps = {
@@ -206,7 +297,7 @@ export default function ShopGrid({
     priceBand,
     onPriceBandChange: setPriceBand,
     newOnly,
-    onToggleNewOnly: () => setNewOnly((v) => !v),
+    onToggleNewOnly: () => setNewOnly(!newOnly),
     onReset: resetFilters,
     resultCount: filtered.length,
   };

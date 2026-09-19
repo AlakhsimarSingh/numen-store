@@ -9,9 +9,33 @@ const ease = [0.16, 1, 0.3, 1] as const;
 
 const CONTACT_PHONE_WHATSAPP = "918728882880"; // wa.me — no +, no spaces
 
+/* ---------- Icons ---------- */
+
+const iconProps = {
+  width: 18,
+  height: 18,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.8,
+} as const;
+
+function WhatsAppMark() {
+  return (
+    <svg {...iconProps}>
+      <path d="M6.5 17.5 4 20l2.6-2.4A8 8 0 1 1 9.3 19Z" strokeLinejoin="round" />
+      <path
+        d="M9 9.7c0 3 2.3 5.3 5.3 5.3.4 0 .8-.3.8-.7v-1.2c0-.3-.2-.6-.5-.7l-1.6-.5c-.3-.1-.6 0-.7.2l-.3.5c-1-.5-1.9-1.4-2.4-2.4l.5-.3c.2-.1.3-.4.2-.7l-.5-1.6c-.1-.3-.4-.5-.7-.5H8.7c-.4 0-.7.4-.7.8Z"
+        fill="currentColor"
+        stroke="none"
+      />
+    </svg>
+  );
+}
+
 function InstagramMark() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg {...iconProps}>
       <rect x="3" y="3" width="18" height="18" rx="5.5" />
       <circle cx="12" cy="12" r="4.2" />
       <circle cx="17.15" cy="6.85" r="1.1" fill="currentColor" stroke="none" />
@@ -19,169 +43,160 @@ function InstagramMark() {
   );
 }
 
-function WhatsAppMark() {
+function SnapchatMark() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M6.5 17.5 4 20l2.6-2.4A8 8 0 1 1 9.3 19Z" />
-      <path d="M9 9.7c0 3 2.3 5.3 5.3 5.3.4 0 .8-.3.8-.7v-1.2c0-.3-.2-.6-.5-.7l-1.6-.5c-.3-.1-.6 0-.7.2l-.3.5c-1-.5-1.9-1.4-2.4-2.4l.5-.3c.2-.1.3-.4.2-.7l-.5-1.6c-.1-.3-.4-.5-.7-.5H8.7c-.4 0-.7.4-.7.8Z" fill="currentColor" stroke="none" />
+    <svg {...iconProps}>
+      <path
+        d="M12 3.5c-2.6 0-4.3 1.9-4.3 4.4v2.1c-.6.3-1.4.4-2.2.5.2.6.7.9 1.4 1.1-.3.9-.9 1.6-2 2.1.5.5 1.4.7 2.2.8.2.4.4.8.6 1 .9 0 1.5-.3 2.2-.3.7.6 1.4 1.1 2.1 1.1s1.4-.5 2.1-1.1c.7 0 1.3.3 2.2.3.2-.2.4-.6.6-1 .8-.1 1.7-.3 2.2-.8-1.1-.5-1.7-1.2-2-2.1.7-.2 1.2-.5 1.4-1.1-.8-.1-1.6-.2-2.2-.5V7.9c0-2.5-1.7-4.4-4.3-4.4Z"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
 
 function TelegramMark() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <svg {...iconProps}>
       <circle cx="12" cy="12" r="9" />
       <path d="m7 12.3 4.3 1.6 1.4 3.3 2.3-9.7-9.5 3.6 2.5.9 1 3.1" strokeLinejoin="round" />
     </svg>
   );
 }
 
-interface SocialLink {
-  label: string;
-  href: string;
-}
+/* ---------- Data ---------- */
 
-interface SocialGroup {
-  key: string;
-  platform: string;
-  icon: () => React.ReactElement;
-  links: SocialLink[];
-}
-
-const socialGroups: SocialGroup[] = [
+const directLinks = [
   {
-    key: "instagram",
-    platform: "Instagram",
-    icon: InstagramMark,
-    links: [
-      { label: "Apparels", href: "https://www.instagram.com/numen.apparels?igsh=M3lyMjZ3aDhrN204" },
-      { label: "Shoes", href: "https://www.instagram.com/numen.shoes?igsh=b2g0eDIycDN4OG9q" },
-      { label: "Accessories", href: "https://www.instagram.com/numen.accessory?igsh=OGE4dWs3bjNtMmdw" },
-      { label: "Bags", href: "https://www.instagram.com/numen.bags?igsh=MWRnZ2llejJzcmtvag==" },
-    ],
-  },
-  {
-    key: "whatsapp",
-    platform: "WhatsApp",
+    label: "WhatsApp Channel",
+    href: "https://whatsapp.com/channel/0029VaI8Lq8HbFV5feUZgi1K",
     icon: WhatsAppMark,
-    links: [
-      { label: "Updates Channel", href: "https://whatsapp.com/channel/0029VaI8Lq8HbFV5feUZgi1K" },
-      { label: "NUMEN Family Community ❤️", href: "https://chat.whatsapp.com/FNdIjeTH4OQBU3XR6FuhC5" },
-    ],
   },
   {
-    key: "telegram",
-    platform: "Telegram",
-    icon: TelegramMark,
-    links: [
-      { label: "Apparels 👕", href: "https://t.me/numenapparels" },
-      { label: "Shoes 👟", href: "https://t.me/numenshoes" },
-      { label: "Accessory 😎", href: "https://t.me/numenaccessory" },
-      { label: "Watches ⌚️", href: "https://t.me/numenwatches" },
-      { label: "Bags 👜", href: "https://t.me/numenbags" },
-    ],
+    label: "Instagram",
+    href: "https://www.instagram.com/nmnnumen?igsh=YzE5bW01ZWl1Z3Br",
+    icon: InstagramMark,
+  },
+  {
+    label: "Snapchat",
+    href: "https://www.snapchat.com/add/nmnnumen?share_id=2rzQly9QK00&locale=en-IN",
+    icon: SnapchatMark,
   },
 ];
 
-function SocialLinks() {
-  const [open, setOpen] = useState<string | null>(null);
-  const lastIndex = socialGroups.length - 1;
+const telegramChannels = [
+  { label: "Apparels 👕", href: "https://t.me/numenapparels" },
+  { label: "Shoes 👟", href: "https://t.me/numenshoes" },
+  { label: "Accessory 😎", href: "https://t.me/numenaccessory" },
+  { label: "Watches ⌚️", href: "https://t.me/numenwatches" },
+  { label: "Bags 👜", href: "https://t.me/numenbags" },
+  { label: "Shades 🕶️", href: "https://t.me/numenshades" },
+  { label: "Fragrances 🧴", href: "https://t.me/numenfragrances" },
+  { label: "Purse Ladies 👛", href: "https://t.me/numenpurseladies" },
+];
 
+/* ---------- Social row ---------- */
+
+const circleBase =
+  "flex h-11 w-11 items-center justify-center rounded-full border transition-colors";
+const circleIdle =
+  "border-white/15 text-ink/70 hover:border-accent hover:text-accent";
+
+function TelegramMenu() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Telegram channels"
+        aria-expanded={open}
+        className={cn(
+          circleBase,
+          open ? "border-accent bg-accent/10 text-accent" : circleIdle
+        )}
+      >
+        <TelegramMark />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: 8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.18, ease }}
+              className="absolute bottom-full left-1/2 z-40 mb-3 w-[17rem] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/10 bg-bg shadow-2xl"
+            >
+              <p className="border-b border-white/5 px-4 py-2.5 font-mono text-[10px] uppercase tracking-widest text-muted">
+                Telegram
+              </p>
+              <div className="grid grid-cols-2 gap-px p-1.5">
+                {telegramChannels.map((c) => (
+                  <a
+                    key={c.href}
+                    href={c.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 font-body text-xs text-ink/80 transition-colors hover:bg-surface2 hover:text-accent"
+                  >
+                    <span className="truncate">{c.label}</span>
+                    <ExternalLink size={10} className="ml-2 shrink-0 text-muted" />
+                  </a>
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SocialLinks() {
   return (
     <div className="flex flex-col items-center gap-2">
       <p className="font-mono text-sm uppercase tracking-widest text-muted">Social Media</p>
-      <div className="flex gap-4">
-        {socialGroups.map((group, i) => {
-          const Icon = group.icon;
-          const isOpen = open === group.key;
-
-          // Centered layout now, so every popover can safely stay centered
-          // under its trigger — no left/right viewport-edge overflow risk
-          // like when this sat at the far left of a multi-column footer.
-          const isFirst = i === 0;
-          const isLast = i === lastIndex;
-          const menuAnchorClass = "left-1/2 -translate-x-1/2";
-          const arrowAnchorClass = "left-1/2 -translate-x-1/2";
-
-          return (
-            <div key={group.key} className="relative">
-              <button
-                onClick={() => setOpen(isOpen ? null : group.key)}
-                aria-label={group.platform}
-                className={cn(
-                  "flex h-12 w-12 items-center justify-center rounded-full border transition-colors",
-                  isOpen
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-white/20 text-ink/80 hover:border-accent hover:text-accent"
-                )}
-              >
-                <Icon />
-              </button>
-
-              <AnimatePresence>
-                {isOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setOpen(null)} />
-                    <motion.div
-                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                      transition={{ duration: 0.18, ease }}
-                      className={cn(
-                        "absolute bottom-full z-40 mb-3 w-52 overflow-hidden rounded-2xl border border-white/10 bg-bg shadow-2xl",
-                        menuAnchorClass
-                      )}
-                    >
-                      <p className="border-b border-white/5 px-4 py-2.5 font-mono text-[10px] uppercase tracking-widest text-muted">
-                        {group.platform}
-                      </p>
-                      <div className="py-1">
-                        {group.links.map((link) => (
-                          <a
-                            key={link.href}
-                            href={link.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center justify-between px-4 py-2.5 font-body text-xs text-ink/80 transition-colors hover:bg-surface2 hover:text-accent"
-                          >
-                            {link.label}
-                            <ExternalLink size={11} className="shrink-0 text-muted" />
-                          </a>
-                        ))}
-                      </div>
-                      <span
-                        className={cn(
-                          "absolute -bottom-1.5 h-3 w-3 rotate-45 border-b border-r border-white/10 bg-bg",
-                          arrowAnchorClass
-                        )}
-                      />
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
+      <div className="flex items-center gap-3">
+      {directLinks.map(({ label, href, icon: Icon }) => (
+        <a
+          key={href}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={label}
+          title={label}
+          className={cn(circleBase, circleIdle)}
+        >
+          <Icon />
+        </a>
+      ))}
+      <TelegramMenu />
       </div>
     </div>
   );
 }
 
+/* ---------- Contact ---------- */
+
 function ContactPrompt() {
   return (
-    <div className="flex flex-col items-center gap-1.5 text-center">
-      <p className="max-w-sm font-body text-base text-ink/80">
-        For LIVE QUALITY REVIEW about ANYTHING.
-      </p>
-      <p className="max-w-sm font-body text-base text-ink/80">
-        Call us on WHATSAPP direct.
-      </p>
+    <div className="flex flex-col items-center gap-4 text-center">
+      <div className="flex flex-col items-center gap-1.5">
+        <p className="max-w-sm font-body text-base text-ink/80">
+          For LIVE QUALITY REVIEW about ANYTHING.
+        </p>
+        <p className="max-w-sm font-body text-base text-ink/80">
+          Call us on WHATSAPP direct.
+        </p>
+      </div>
       <a
         href={`https://wa.me/${CONTACT_PHONE_WHATSAPP}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-2 flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
+        className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 font-body text-sm font-semibold text-bg transition-transform hover:scale-[1.02]"
       >
         <WhatsAppMark />
         Call/Message on WhatsApp
@@ -190,18 +205,22 @@ function ContactPrompt() {
   );
 }
 
+/* ---------- Footer ---------- */
+
 export default function Footer() {
   const pathname = usePathname();
   if (pathname?.startsWith("/admin")) return null;
 
   return (
     <footer className="border-t border-white/5 bg-surface">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-5 px-6 py-8">
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-7 px-6 py-10">
         <ContactPrompt />
         <SocialLinks />
 
         <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-white/5 pt-5 sm:flex-row">
-          <p className="font-mono text-xs text-muted">© {new Date().getFullYear()} All rights reserved.</p>
+          <p className="font-mono text-xs text-muted">
+            © {new Date().getFullYear()} All rights reserved.
+          </p>
           <div className="flex gap-6">
             <a href="/privacy" className="font-mono text-xs text-muted hover:text-ink">Privacy</a>
             <a href="/terms" className="font-mono text-xs text-muted hover:text-ink">Terms</a>
