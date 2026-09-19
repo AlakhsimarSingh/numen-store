@@ -172,7 +172,7 @@ function ContactPrompt() {
   return (
     <div className="flex flex-col items-center gap-3 text-center">
       <p className="max-w-xs font-body text-sm text-muted">
-        Want a live quality review of a product before you buy? Call us on WhatsApp.
+        For LIVE QUALITY REVIEW about ANYTHING Call us on WHATSAPP direct.
       </p>
       <a
         href={`https://wa.me/${CONTACT_PHONE_WHATSAPP}`}
