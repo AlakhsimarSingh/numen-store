@@ -33,7 +33,7 @@ export default async function Home() {
       <CategoryGrid products={products} />
       <PersonalizedSection products={products} />
       {/* <BestSellersSection products={products} /> */}
-      <TestimonialsSection testimonials={testimonials} />
+      {/* <TestimonialsSection testimonials={testimonials} /> */}
     </>
   );
 }
