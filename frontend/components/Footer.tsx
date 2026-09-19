@@ -109,7 +109,7 @@ function SocialLinks() {
     // icon at its right end), so it stays centered on screen and can't spill
     // past the right edge.
     <div className="flex flex-col items-center gap-2">
-      <p className="font-mono text-sm uppercase tracking-widest text-muted">Social Media</p>
+      <p className="font-mono text-sm uppercase tracking-widest text-muted">Connect with Us on Social Media</p>
       <div className="relative flex items-center gap-3">
         {directLinks.map(({ label, href, icon: Icon }) => (
           <a
