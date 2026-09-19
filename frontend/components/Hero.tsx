@@ -256,13 +256,13 @@ export default function Hero({
               href="/shop"
               className="rounded-full bg-accent px-7 py-3 text-center font-body text-sm font-semibold text-bg transition-transform hover:scale-105"
             >
-              Shop New Arrivals
+              See All Products
             </Link>
             <Link
               href="/categories"
               className="rounded-full border border-white/15 px-7 py-3 text-center font-body text-sm font-semibold text-ink backdrop-blur-sm transition-colors hover:border-accent/50 hover:text-accent"
             >
-              Explore Categories
+              See All Categories
             </Link>
           </motion.div>
         </div>
