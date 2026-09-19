@@ -130,6 +130,7 @@ function SocialLinks() {
       <p className="text-center font-mono text-sm uppercase tracking-widest text-muted">Connect With Us on Social Media</p>
       <div className="relative flex items-center gap-5 sm:gap-6">
         {renderLink("Instagram")}
+        {renderLink("WhatsApp Channel")}
 
         <button
           onClick={() => setTelegramOpen((v) => !v)}
@@ -143,7 +144,6 @@ function SocialLinks() {
           <TelegramMark />
         </button>
 
-        {renderLink("WhatsApp Channel")}
         {renderLink("Snapchat")}
 
       <AnimatePresence>
