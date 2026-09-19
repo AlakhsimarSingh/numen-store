@@ -27,7 +27,7 @@ const SORT_OPTIONS: SortOption<SortKey>[] = [
 // Rendering all 440+ products at once (each with its own Image + framer
 // motion mount) is what was making the page laggy. Paginating keeps the
 // live DOM small regardless of catalog size.
-const PAGE_SIZE = 36;
+const PAGE_SIZE = 45;
 
 export default function ShopGrid({
   initialProducts,
