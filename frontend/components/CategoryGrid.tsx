@@ -9,19 +9,21 @@ import type { Product } from "@/src/types";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-// Explicit, hand-picked browsing order: shoes first, then formal shoes,
-// then watches, shades, ladies purse — everything else (slippers,
-// perfumes, and anything added later) falls through to the end, sorted by
-// productCount so new categories don't need a code change to appear
-// sensibly. Matched against category.name (case-insensitive, partial
-// match) rather than slug, since slugs weren't available here — swap to
-// slug matching if you'd rather, it's more robust than name text.
+// Explicit, hand-picked browsing order: sneakers → formal shoes →
+// slippers → watches → perfumes → shades → ladies purse. Anything that
+// doesn't match one of these keys (added later) falls through to the end,
+// sorted by productCount so a new category doesn't need a code change to
+// appear sensibly. Matched against category.name (case-insensitive,
+// partial match) rather than slug, since slugs weren't available here —
+// swap to slug matching if you'd rather, it's more robust than name text.
 const CATEGORY_ORDER = [
-  "sneakers",
+  "shoes",
   "formal shoes",
+  "slippers",
   "watches",
+  "perfumes & deos",
   "shades",
-  "purse",
+  "ladies purse",
 ];
 
 function orderRank(category: Category): number {
