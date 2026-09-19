@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
 } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -135,6 +136,45 @@ export default function ProductDetail({
   function goToMedia(index: number) {
     directionRef.current = index >= activeMedia ? 1 : -1;
     setActiveMedia(index);
+  }
+
+  // ---------- Touch swipe (mobile) ----------
+
+  const SWIPE_MIN_PX = 40;
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  function handleTouchStart(e: ReactTouchEvent<HTMLDivElement>) {
+    if (gallery.length <= 1 || gallery[activeMedia]?.type === "video") return;
+    const t = e.touches[0];
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+    setAutoplayPaused(true);
+  }
+
+  function handleTouchEnd(e: ReactTouchEvent<HTMLDivElement>) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    setAutoplayPaused(false);
+    if (!start) return;
+
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Must be a clearly horizontal gesture, so normal vertical page
+    // scrolling over the image never flips it.
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+
+    if (dx < 0) {
+      directionRef.current = 1;
+      setActiveMedia((activeMedia + 1) % gallery.length);
+    } else {
+      directionRef.current = -1;
+      setActiveMedia((activeMedia - 1 + gallery.length) % gallery.length);
+    }
+  }
+
+  function handleTouchCancel() {
+    touchStartRef.current = null;
+    setAutoplayPaused(false);
   }
 
   // Fires the glitch overlay (RGB split / slice tear / scanlines) for a
@@ -324,7 +364,7 @@ export default function ProductDetail({
             <div
               ref={imageWrapRef}
               className={cn(
-                "relative order-1 aspect-[3/4] flex-1 overflow-hidden rounded-3xl bg-surface2 lg:order-2",
+                "relative order-1 aspect-[3/4] flex-1 touch-pan-y overflow-hidden rounded-3xl bg-surface2 lg:order-2",
                 canZoomHere && (zoomed ? "cursor-zoom-out" : "cursor-zoom-in")
               )}
               onMouseEnter={() => setAutoplayPaused(true)}
@@ -334,6 +374,9 @@ export default function ProductDetail({
               }}
               onMouseMove={handleImageMouseMove}
               onClick={handleImageClick}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchCancel}
             >
               {/* Hidden SVG filters that isolate the red and cyan channels of
                   the duplicated image layers below, used for the RGB-split
