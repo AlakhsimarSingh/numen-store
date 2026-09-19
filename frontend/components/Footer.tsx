@@ -96,46 +96,55 @@ const telegramChannels = [
 
 /* ---------- Social row ---------- */
 
-const circleBase =
-  "flex h-11 w-11 items-center justify-center rounded-full border transition-colors";
-const circleIdle =
-  "border-white/15 text-ink/70 hover:border-accent hover:text-accent";
+const tileBase =
+  "flex h-14 w-14 items-center justify-center rounded-2xl border bg-surface2 transition-all sm:h-16 sm:w-16 [&>svg]:h-7 [&>svg]:w-7 sm:[&>svg]:h-8 sm:[&>svg]:w-8";
+const tileIdle =
+  "border-white/15 text-ink hover:-translate-y-0.5 hover:border-accent hover:text-accent";
 
 function SocialLinks() {
   const [telegramOpen, setTelegramOpen] = useState(false);
+
+  function renderLink(label: string) {
+    const link = directLinks.find((l) => l.label === label);
+    if (!link) return null;
+    const Icon = link.icon;
+    return (
+      <a
+        href={link.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={link.label}
+        title={link.label}
+        className={cn(tileBase, tileIdle)}
+      >
+        <Icon />
+      </a>
+    );
+  }
 
   return (
     // The popover is anchored to the centered icon row (not to the Telegram
     // icon at its right end), so it stays centered on screen and can't spill
     // past the right edge.
     <div className="flex flex-col items-center gap-2">
-      <p className="font-mono text-sm uppercase tracking-widest text-muted">Connect with Us on Social Media</p>
-      <div className="relative flex items-center gap-3">
-        {directLinks.map(({ label, href, icon: Icon }) => (
-          <a
-            key={href}
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={label}
-            title={label}
-            className={cn(circleBase, circleIdle)}
-          >
-            <Icon />
-          </a>
-        ))}
+      <p className="font-mono text-sm uppercase tracking-widest text-muted">Social Media</p>
+      <div className="relative flex items-center gap-3.5 sm:gap-4">
+        {renderLink("Instagram")}
 
         <button
           onClick={() => setTelegramOpen((v) => !v)}
           aria-label="Telegram channels"
           aria-expanded={telegramOpen}
           className={cn(
-            circleBase,
-            telegramOpen ? "border-accent bg-accent/10 text-accent" : circleIdle
+            tileBase,
+            telegramOpen ? "border-accent bg-accent/10 text-accent" : tileIdle
           )}
         >
           <TelegramMark />
         </button>
+
+        {renderLink("WhatsApp Channel")}
+        {renderLink("Snapchat")}
 
       <AnimatePresence>
         {telegramOpen && (
