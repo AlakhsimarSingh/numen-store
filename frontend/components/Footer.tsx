@@ -126,9 +126,9 @@ function SocialLinks() {
     // The popover is anchored to the centered icon row (not to the Telegram
     // icon at its right end), so it stays centered on screen and can't spill
     // past the right edge.
-    <div className="flex flex-col items-center gap-2">
-      <p className="font-mono text-sm uppercase tracking-widest text-muted">Social Media</p>
-      <div className="relative flex items-center gap-3.5 sm:gap-4">
+    <div className="flex flex-col items-center gap-6">
+      <p className="text-center font-mono text-sm uppercase tracking-widest text-muted">Connect With Us on Social Media</p>
+      <div className="relative flex items-center gap-5 sm:gap-6">
         {renderLink("Instagram")}
 
         <button
@@ -188,8 +188,8 @@ function SocialLinks() {
 
 function ContactPrompt() {
   return (
-    <div className="flex flex-col items-center gap-4 text-center">
-      <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center gap-6 text-center">
+      <div className="flex flex-col items-center gap-2.5">
         <p className="max-w-sm font-body text-base text-ink/80">
           For LIVE QUALITY REVIEW about ANYTHING.
         </p>
@@ -218,11 +218,11 @@ export default function Footer() {
 
   return (
     <footer className="border-t border-white/5 bg-surface">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-7 px-6 py-10">
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-12 px-6 py-14">
         <ContactPrompt />
         <SocialLinks />
 
-        <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-white/5 pt-5 sm:flex-row">
+        <div className="flex w-full flex-col items-center justify-between gap-4 border-t border-white/5 pt-8 sm:flex-row">
           <p className="font-mono text-xs text-muted">
             © {new Date().getFullYear()} All rights reserved.
           </p>
