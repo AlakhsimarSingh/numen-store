@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Minus, Plus, PartyPopper, ShoppingBag, Store, Tag, Trash2, X } from "lucide-react";
+import { Loader2, Minus, Plus, PartyPopper, ShoppingBag, Sparkles, Store, Tag, Trash2, X } from "lucide-react";
 import { useCartStore } from "@/src/hooks/useCartStore";
 import { useCheckoutStore } from "@/src/hooks/useCheckoutStore";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
@@ -39,6 +39,7 @@ export default function CartPage() {
   const [promoApplying, setPromoApplying] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [promoFocused, setPromoFocused] = useState(false);
 
   const showToast = useToastStore((s) => s.show);
   const shippingSettings = useSiteSettingsStore(
@@ -275,12 +276,43 @@ export default function CartPage() {
             </div>
           ) : (
             <>
-              <div className="mt-4 flex items-center gap-2">
+              {/* Nudge banner — draws the eye to the field below before the
+                  person has typed anything. Stops pulsing the moment they
+                  focus the input, so it never fights with active typing. */}
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.4, ease }}
+                className="mt-4 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3.5 py-2.5"
+              >
+                <motion.span
+                  animate={{ scale: [1, 1.15, 1], rotate: [0, -8, 8, 0] }}
+                  transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 1, ease }}
+                  className="shrink-0 text-accent"
+                >
+                  <Sparkles size={15} />
+                </motion.span>
+                <p className="font-body text-xs text-ink">
+                  Add your <span className="font-semibold text-accent">representative signature</span> below to unlock checkout.
+                </p>
+              </motion.div>
+
+              <motion.div
+                animate={
+                  !promoFocused
+                    ? { boxShadow: ["0 0 0 0 rgba(201,255,61,0)", "0 0 0 6px rgba(201,255,61,0.12)", "0 0 0 0 rgba(201,255,61,0)"] }
+                    : { boxShadow: "0 0 0 0 rgba(201,255,61,0)" }
+                }
+                transition={!promoFocused ? { duration: 1.8, repeat: Infinity, ease } : { duration: 0.2 }}
+                className="mt-3 flex items-center gap-2 rounded-full"
+              >
                 <div className="flex flex-1 items-center gap-2 rounded-full border border-white/10 bg-bg px-4 py-2.5">
                   <Tag size={14} className="text-muted" />
                   <input
                     value={promoInput}
                     onChange={(e) => setPromoInput(e.target.value)}
+                    onFocus={() => setPromoFocused(true)}
+                    onBlur={() => setPromoFocused(false)}
                     placeholder="Representative signature"
                     disabled={promoRevalidating}
                     className="w-full bg-transparent font-body text-sm text-ink placeholder:text-muted focus:outline-none disabled:opacity-60"
@@ -294,7 +326,7 @@ export default function CartPage() {
                 >
                   {promoApplying ? "Checking…" : "Apply"}
                 </button>
-              </div>
+              </motion.div>
               <button
                 type="button"
                 onClick={() => setPickerOpen(true)}
