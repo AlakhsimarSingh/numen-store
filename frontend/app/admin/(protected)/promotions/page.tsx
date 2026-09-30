@@ -15,7 +15,7 @@ const formatINR = (value: number) =>
 
 const emptyForm = {
   code: "",
-  percent: "10",
+  percent: "0",
   businessName: "",
   contactName: "",
   contactEmail: "",
