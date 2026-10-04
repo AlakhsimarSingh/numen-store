@@ -6,6 +6,7 @@ export interface CatalogProduct {
   slug: string;
   category: string;
   price: number;
+  image: string;
   compareAtPrice?: number;
   colors: string[];
   sizes: string[];
@@ -58,11 +59,32 @@ function bm25Rank(products: PreparedProduct[], terms: string[], k1 = 1.5, b = 0.
 }
 
 export async function searchCatalog(query: string): Promise<CatalogProduct[]> {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const stopwords = new Set(["a", "an", "are", "can", "find", "for", "have", "i", "me", "of", "please", "the", "u", "you"]);
+  const terms = query
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 1 && !stopwords.has(term));
   if (terms.length === 0) return [];
 
+  const categories = await prisma.category.findMany({
+    where: { isVisible: true },
+    select: { name: true, slug: true },
+  });
+  const categorySlugs = categories
+    .filter((category) => {
+      const categoryTerms = `${category.name} ${category.slug}`
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean);
+      return categoryTerms.length > 1 && categoryTerms.every((term) => terms.includes(term));
+    })
+    .map((category) => category.slug);
+
   const products = await prisma.product.findMany({
-    where: { category: { isVisible: true } },
+    where: {
+      category: { isVisible: true },
+      ...(categorySlugs.length > 0 ? { categorySlug: { in: categorySlugs } } : {}),
+    },
     include: { category: true },
     take: 300,
   });
@@ -100,6 +122,7 @@ export async function searchCatalog(query: string): Promise<CatalogProduct[]> {
     slug: p.slug,
     category: p.category.name,
     price: Number(p.price),
+    image: p.image,
     compareAtPrice: p.compareAtPrice != null ? Number(p.compareAtPrice) : undefined,
     colors,
     sizes: p.sizes,

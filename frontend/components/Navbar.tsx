@@ -2,20 +2,31 @@
 import { usePathname } from "next/navigation";
 import { useSiteSettingsStore } from "@/src/hooks/useSiteSettingsStore";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Search, User } from "lucide-react";
+import { Search, User } from "lucide-react";
 import CategoryMegaMenu from "@/components/CategoryMegaMenu";
 import CartPreview from "@/components/CartPreview";
-import SearchOverlay from "@/components/SearchOverlay";
-import MobileNavOverlay from "@/components/MobileNavOverlay";
 import { useAuthStore } from "@/src/hooks/useAuthStore";
 import { cn } from "@/src/lib/utils";
 import { useCurrencyStore } from "@/src/hooks/useCurrencyStore";
 import { detectCurrencyFromIP, detectCurrencyFromLocale } from "@/src/lib/currency";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
 
+// Only needed after a click, so they live in their own chunks instead of the
+// initial bundle. They still start loading right after hydration, so they're
+// ready by the time anyone taps search / the mobile menu.
+const SearchOverlay = dynamic(() => import("@/components/SearchOverlay"), { ssr: false });
+const MobileNavOverlay = dynamic(() => import("@/components/MobileNavOverlay"), { ssr: false });
+
 const ease = [0.16, 1, 0.3, 1] as const;
+
+// The IP lookup is a network request. The effect below re-runs whenever
+// `currencies` changes, which used to fire the request again each time.
+// Caching the promise at module level makes it happen once per page load.
+let ipCurrencyPromise: ReturnType<typeof detectCurrencyFromIP> | null = null;
+const getIpCurrency = () => (ipCurrencyPromise ??= detectCurrencyFromIP());
 
 // "Home" and "Categories" (the mega menu) render first and separately,
 // outside this array, since they're no longer plain text links in the
@@ -39,7 +50,6 @@ export default function Navbar() {
   const siteName = useSiteSettingsStore((s) => s.siteName);
   const userSelected = useCurrencyStore((s) => s.userSelected);
   const setCurrency = useCurrencyStore((s) => s.setCurrency);
-  const loadRates = useCurrencyStore((s) => s.loadRates);
   const currencies = useCurrencyStore((s) => s.currencies);
   useEffect(() => {
     function handleScroll() {
@@ -54,7 +64,7 @@ export default function Navbar() {
     let cancelled = false;
 
     async function detectAndSetCurrency() {
-      const ipCurrency = await detectCurrencyFromIP();
+      const ipCurrency = await getIpCurrency();
       if (cancelled) return;
 
       const candidate = ipCurrency ?? detectCurrencyFromLocale(navigator.language);

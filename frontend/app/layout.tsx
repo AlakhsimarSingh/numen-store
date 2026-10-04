@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Inter, JetBrains_Mono } from "next/font/google";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import EchoWidget from "@/components/assistant/EchoWidget";
+import EchoWidgetLoader from "@/components/assistant/EchoWidgetLoader";
 import "./globals.css";
 import Toaster from "@/components/Toaster";
 import SiteSettingsHydrator from "@/components/SiteSettingsHydrator";
@@ -41,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="min-h-screen pt-20">{children}</main>
         <Footer />
         <Toaster />
-        <EchoWidget />
+        <EchoWidgetLoader />
       </body>
     </html>
   );

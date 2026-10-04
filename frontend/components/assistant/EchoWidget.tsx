@@ -9,9 +9,13 @@ import { useAuthStore } from "@/src/hooks/useAuthStore";
 import { streamAssistantReply } from "@/src/lib/assistant";
 import { getInitialSuggestions } from "@/src/lib/assistantEngine";
 import { cn } from "@/src/lib/utils";
+import MarkdownMessage from "./MarkdownMessage";
+// import MarkdownMessage from "./MarkdownMessage";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 const GREETING_DELAY = 1400;
+// Only the recent turns are sent: a smaller prompt means a faster first token.
+const HISTORY_LIMIT = 10;
 
 export default function EchoWidget() {
   const user = useAuthStore((s) => s.user);
@@ -54,10 +58,9 @@ export default function EchoWidget() {
     const value = (text ?? input).trim();
     if (!value) return;
 
-    const history = [...messages, { role: "user" as const, text: value }].map((m) => ({
-      role: m.role,
-      text: m.text,
-    }));
+    const history = [...messages, { role: "user" as const, text: value }]
+      .slice(-HISTORY_LIMIT)
+      .map((m) => ({ role: m.role, text: m.text }));
 
     addMessage("user", value);
     setInput("");
@@ -165,11 +168,13 @@ export default function EchoWidget() {
                 <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
                   <div
                     className={cn(
-                      "max-w-[80%] rounded-2xl px-4 py-2.5 font-body text-sm leading-relaxed",
-                      m.role === "user" ? "rounded-br-sm bg-accent text-bg" : "rounded-bl-sm bg-surface2 text-ink"
+                      "rounded-2xl px-4 py-2.5 font-body text-sm leading-relaxed",
+                      m.role === "user"
+                        ? "max-w-[80%] whitespace-pre-wrap rounded-br-sm bg-accent text-bg"
+                        : "max-w-[92%] rounded-bl-sm bg-surface2 text-ink"
                     )}
                   >
-                    {m.text}
+                    {m.role === "user" ? m.text : <MarkdownMessage text={m.text} />}
                     {m.streaming && (
                       <span className="ml-0.5 inline-block h-3.5 w-1.5 animate-pulse bg-current align-middle" />
                     )}

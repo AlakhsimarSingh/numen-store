@@ -11,6 +11,7 @@ import { formatCountdown } from "@/src/lib/countdown";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
+
 export default function FlashDealSection({ deal }: { deal: FlashDeal }) {
   const endTime = new Date(deal.endsAt).getTime();
   const [remaining, setRemaining] = useState(() => endTime - Date.now());

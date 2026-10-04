@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { CartItem, Product } from "@/src/types";
+import { useInterestStore } from "@/src/hooks/useInterestStore";
 
 interface CartState {
   items: CartItem[];
@@ -27,7 +28,10 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      addItem: (product, qty = 1, variant) =>
+      addItem: (product, qty = 1, variant) => {
+        // Strongest intent signal short of buying — nudges the homepage feed.
+        useInterestStore.getState().track(product.categorySlug, "cart", product.id);
+
         set((state) => {
           const lineId = buildLineId(product.id, variant);
           const existing = state.items.find((i) => i.productId === lineId);
@@ -58,7 +62,8 @@ export const useCartStore = create<CartState>()(
               },
             ],
           };
-        }),
+        });
+      },
       removeItem: (lineId) => set((state) => ({ items: state.items.filter((i) => i.productId !== lineId) })),
       updateQty: (lineId, qty) =>
         set((state) => ({

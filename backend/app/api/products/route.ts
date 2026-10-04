@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth/session";
 import { computeStock, generateSeoFields, generateUniqueSlug, serializeProduct } from "@/lib/products/products";
+import { revalidateFrontend } from "@/lib/revalidateFrontend";
 
 export async function GET() {
   const admin = await requireAdmin();
@@ -114,6 +115,9 @@ export async function POST(req: NextRequest) {
         keywords: seo.keywords,
       },
     });
+    // Products appear on the homepage, shop and category pages, and category
+    // cards show product counts, so refresh both caches.
+    void revalidateFrontend(["products", "categories"]);
     return NextResponse.json(serializeProduct(created), { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to create product." }, { status: 500 });

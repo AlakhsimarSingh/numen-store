@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { fetchCategoryBySlugServer, fetchProductsServer } from "@/src/lib/serverApi";
 import { iconOptions, iconNames } from "@/src/lib/iconMap";
 import ShopGrid from "@/components/shop/ShopGrid";
+import CategoryViewTracker from "@/components/shop/CategoryViewTracker";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL, buildBreadcrumbJsonLd } from "@/src/lib/seo";
 
@@ -64,6 +65,7 @@ export default async function CategoryPage({
   return (
     <div className="mx-auto max-w-7xl px-6 py-12">
       <JsonLd data={breadcrumbJsonLd} />
+      <CategoryViewTracker categorySlug={category.slug} />
 
       <div className="mb-8 flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-full bg-surface text-accent">

@@ -741,9 +741,9 @@ export default function ProductDetail({
           </div>
 
           <div className="mt-8 space-y-3 border-t border-white/5 pt-6">
-            <div className="flex items-center gap-3 font-body text-xs text-muted">
+            {/* <div className="flex items-center gap-3 font-body text-xs text-muted">
               <Truck size={15} className="text-accent" /> Free shipping on orders over ₹{freeShippingThreshold}
-            </div>
+            </div> */}
             <div className="flex items-center gap-3 font-body text-xs text-muted">
               <ShieldCheck size={15} className="text-accent" /> Quality assured. No returns or refunds.
             </div>

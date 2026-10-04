@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { fetchProductBySlugServer, fetchProductsServer, fetchCategoriesServer } from "@/src/lib/serverApi";
 import { fetchSiteSettingsForServer } from "@/src/lib/site-settings";
 import ProductDetail from "@/components/product/ProductDetail";
+import ProductViewTracker from "@/components/product/ProductViewTracker";
 import ProductCard from "@/components/ProductCard";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { SITE_URL, buildBreadcrumbJsonLd, buildProductJsonLd } from "@/src/lib/seo";
@@ -30,7 +31,7 @@ export async function generateMetadata({
   const title = product.metaTitle || `${product.name} — NUMEN.`;
   const description =
     product.metaDescription || `${product.name} — premium fit from NUMEN's ${categoryLabel} lineup. Shop now.`;
-  const url = `${SITE_URL}/products/${product.slug}`;
+  const url = `${SITE_URL}/product/${product.slug}`;
 
   return {
     title,
@@ -75,7 +76,7 @@ export default async function ProductPage({
     .filter((p) => p.categorySlug === product.categorySlug && p.id !== product.id)
     .slice(0, 4);
 
-  const productUrl = `${SITE_URL}/products/${product.slug}`;
+  const productUrl = `${SITE_URL}/product/${product.slug}`;
 
   const breadcrumbJsonLd = buildBreadcrumbJsonLd([
     { name: "Shop", url: `${SITE_URL}/shop` },
@@ -109,6 +110,7 @@ export default async function ProductPage({
     <div className="mx-auto max-w-7xl px-6 py-12">
       <JsonLd data={breadcrumbJsonLd} />
       <JsonLd data={productJsonLd} />
+      <ProductViewTracker categorySlug={product.categorySlug} productId={product.id} />
 
       <ProductDetail
         product={product}

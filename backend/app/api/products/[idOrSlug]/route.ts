@@ -10,6 +10,7 @@ import {
   serializeProduct,
 } from "@/lib/products/products";
 import { deleteMediaByUrls } from "@/lib/storage/supabase";
+import { revalidateFrontend } from "@/lib/revalidateFrontend";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ idOrSlug: string }> }) {
   const { idOrSlug } = await params;
@@ -184,6 +185,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       deleteMediaByUrls(removedUrls).catch((err) => console.error("Storage cleanup failed:", err));
     }
 
+    void revalidateFrontend(["products", "categories"]);
     return NextResponse.json(serializeProduct(updated));
   } catch {
     return NextResponse.json({ error: "Failed to update product." }, { status: 500 });
@@ -206,5 +208,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     deleteMediaByUrls(mediaUrls).catch((err) => console.error("Storage cleanup failed:", err));
   }
 
+  void revalidateFrontend(["products", "categories"]);
   return NextResponse.json({ ok: true });
 }

@@ -10,6 +10,18 @@ import HeroSupportBadge from "./home/HeroSupportBadge";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 const LOOP_GAP_MS = 1000;
+const MEDIA_FILTER = "saturate(0.75) contrast(1.08) brightness(0.55)";
+
+// Stable no-op: the old `useState` setter re-rendered the ENTIRE hero (headline,
+// badge, both stacks...) every time the stack changed slide, for a value nobody read.
+const noop = () => {};
+
+// Same feTurbulence grain as before, but as a tiled data-URI background. The
+// browser rasterises it once and caches the bitmap instead of re-evaluating an
+// SVG filter over a full-screen blended layer on top of a playing video.
+const GRAIN_BG = `url("data:image/svg+xml;utf8,${encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>"
+)}")`;
 
 interface HeroProps {
   heroHeadlineLines: string[];
@@ -22,19 +34,114 @@ interface HeroProps {
   customerCareWhatsapp?: string;
 }
 
-/**
- * Fluid, per-line headline sizing. Shorter lines (e.g. "WEAR") get a bigger
- * clamp range than longer ones, so a short admin-entered word reads with
- * real visual weight instead of looking small relative to the space it has.
- * clamp(min, preferred-vw, max) scales continuously across every viewport
- * width rather than jumping at fixed breakpoints.
- */
 function getHeadlineLineStyle(line: string): CSSProperties {
   const len = line.trim().length;
   if (len <= 4) return { fontSize: "clamp(4.5rem, 5vw + 3.5rem, 10rem)" };
   if (len <= 7) return { fontSize: "clamp(3.75rem, 4.5vw + 3rem, 8.75rem)" };
   if (len <= 11) return { fontSize: "clamp(3.25rem, 4vw + 2.25rem, 7.5rem)" };
   return { fontSize: "clamp(2.75rem, 3.5vw + 1.75rem, 6.25rem)" };
+}
+
+/** null until mounted, so server HTML and first client render always match. */
+function useIsDesktop(): boolean | null {
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)"); // Tailwind `md`
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return isDesktop;
+}
+
+/**
+ * Background media. Differences vs. before (same visuals):
+ *  - ONE <Image priority> is always the LCP element and the poster, so the hero
+ *    paints from the optimised image immediately.
+ *  - Only the video for the current breakpoint is mounted (previously both the
+ *    desktop AND mobile videos were in the DOM and downloaded).
+ *  - Video pauses when the hero scrolls out of view (it was decoding + running a
+ *    CSS filter underneath the page for the entire scroll = scroll jank).
+ *  - The 1s gap between loops is preserved.
+ */
+function HeroMedia({ heroImage, videoSrc }: { heroImage: string; videoSrc?: string }) {
+  const [playing, setPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    let visible = true;
+    let needsReplay = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const replay = () => {
+      el.currentTime = 0;
+      el.play().catch(() => {});
+    };
+
+    const onEnded = () => {
+      timer = setTimeout(() => {
+        timer = undefined;
+        if (visible) replay();
+        else needsReplay = true;
+      }, LOOP_GAP_MS);
+    };
+
+    const io = new IntersectionObserver(([entry]) => {
+      visible = entry.isIntersecting;
+      if (!visible) {
+        el.pause();
+        return;
+      }
+      if (needsReplay) {
+        needsReplay = false;
+        replay();
+      } else if (el.paused && !el.ended && !timer) {
+        el.play().catch(() => {});
+      }
+    });
+
+    el.addEventListener("ended", onEnded);
+    io.observe(el);
+    return () => {
+      el.removeEventListener("ended", onEnded);
+      io.disconnect();
+      if (timer) clearTimeout(timer);
+    };
+  }, [videoSrc]);
+
+  return (
+    <>
+      {!playing && (
+        <Image
+          src={heroImage}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+          style={{ filter: MEDIA_FILTER }}
+        />
+      )}
+      {videoSrc && (
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          preload="metadata"
+          onPlaying={() => setPlaying(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ filter: MEDIA_FILTER, opacity: playing ? 1 : 0 }}
+        >
+          <source src={videoSrc} type="video/mp4" />
+        </video>
+      )}
+    </>
+  );
 }
 
 export default function Hero({
@@ -47,8 +154,6 @@ export default function Hero({
   customerCareNumber,
   customerCareWhatsapp,
 }: HeroProps) {
-  const [, setActiveIndex] = useState(0);
-
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
@@ -59,58 +164,15 @@ export default function Hero({
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // No `loop` attribute on either <video> — instead each is let to end
-  // naturally (it holds on its last frame, paused), then this waits
-  // LOOP_GAP_MS before rewinding and replaying it. That's what produces
-  // the 1s pause between loops; `loop` alone restarts instantly with no
-  // gap and gives no hook to insert one.
-  const desktopVideoRef = useRef<HTMLVideoElement>(null);
-  const mobileVideoRef = useRef<HTMLVideoElement>(null);
+  const isDesktop = useIsDesktop();
+  const rawVideo = isDesktop === null ? undefined : isDesktop ? heroVideoDesktop : heroVideoMobile;
+  const videoSrc = !reducedMotion && rawVideo ? rawVideo : undefined;
 
-  useEffect(() => {
-    const desktopEl = desktopVideoRef.current;
-    const mobileEl = mobileVideoRef.current;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-
-    function attach(el: HTMLVideoElement | null) {
-      if (!el) return () => {};
-      const onEnded = () => {
-        const t = setTimeout(() => {
-          if (!el) return;
-          el.currentTime = 0;
-          el.play().catch(() => {
-            // Autoplay can be rejected if the tab lost focus/was
-            // backgrounded during the gap — harmless, it simply won't
-            // resume until the next user interaction or visibility change.
-          });
-        }, LOOP_GAP_MS);
-        timers.push(t);
-      };
-      el.addEventListener("ended", onEnded);
-      return () => el.removeEventListener("ended", onEnded);
-    }
-
-    const detachDesktop = attach(desktopEl);
-    const detachMobile = attach(mobileEl);
-    return () => {
-      detachDesktop();
-      detachMobile();
-      timers.forEach(clearTimeout);
-    };
-  }, [heroVideoDesktop, heroVideoMobile]);
-
-  // Spotlight Drop is fully admin-controlled: only products explicitly
-  // flagged `isSpotlight` in the admin panel show up here. `products` is
-  // already ordered newest-first (see fetchProductsServer), so if nothing
-  // has been flagged yet we fall back to the 5 newest products rather than
-  // showing an empty hero.
+  // `products` is already the server-picked hero list (spotlighted, else newest 5).
   const spotlighted = products.filter((p) => p.isSpotlight);
   const spotlightList = (spotlighted.length > 0 ? spotlighted : products).slice(0, 5);
   const spotlightCount = spotlightList.length;
   const spotlightLabel = `Spotlight Drop — 01 / ${String(spotlightCount).padStart(2, "0")}`;
-
-  const showDesktopVideo = !reducedMotion && !!heroVideoDesktop;
-  const showMobileVideo = !reducedMotion && !!heroVideoMobile;
 
   return (
     <section className="relative -mt-20 overflow-hidden">
@@ -120,62 +182,9 @@ export default function Hero({
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 2.2, ease }}
           className="absolute inset-0"
+          style={{ willChange: "transform, opacity" }}
         >
-          <div className="absolute inset-0 hidden md:block">
-            {showDesktopVideo ? (
-              <video
-                ref={desktopVideoRef}
-                key={heroVideoDesktop}
-                autoPlay
-                muted
-                playsInline
-                preload="metadata"
-                poster={heroImage}
-                className="h-full w-full object-cover"
-                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
-              >
-                <source src={heroVideoDesktop} type="video/mp4" />
-              </video>
-            ) : (
-              <Image
-                src={heroImage}
-                alt=""
-                fill
-                priority
-                sizes="100vw"
-                className="object-cover"
-                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
-              />
-            )}
-          </div>
-
-          <div className="absolute inset-0 md:hidden">
-            {showMobileVideo ? (
-              <video
-                ref={mobileVideoRef}
-                key={heroVideoMobile}
-                autoPlay
-                muted
-                playsInline
-                preload="metadata"
-                poster={heroImage}
-                className="h-full w-full object-cover"
-                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
-              >
-                <source src={heroVideoMobile} type="video/mp4" />
-              </video>
-            ) : (
-              <Image
-                src={heroImage}
-                alt=""
-                fill
-                priority
-                sizes="100vw"
-                className="object-cover"
-                style={{ filter: "saturate(0.75) contrast(1.08) brightness(0.55)" }}
-              />
-            )}
-          </div>
+          <HeroMedia key={videoSrc ?? "image"} heroImage={heroImage} videoSrc={videoSrc} />
         </motion.div>
 
         <div className="absolute inset-0 bg-gradient-to-r from-bg via-bg/70 to-bg/20 md:via-bg/50 md:to-transparent" />
@@ -184,13 +193,11 @@ export default function Hero({
           style={{ background: "radial-gradient(ellipse at center, transparent 40%, rgba(11,11,12,0.55) 100%)" }}
         />
         <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-bg to-transparent" />
-        <svg className="absolute inset-0 h-full w-full opacity-[0.05] mix-blend-overlay" aria-hidden="true">
-          <filter id="hero-grain">
-            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
-            <feColorMatrix type="saturate" values="0" />
-          </filter>
-          <rect width="100%" height="100%" filter="url(#hero-grain)" />
-        </svg>
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 opacity-[0.05] mix-blend-overlay"
+          style={{ backgroundImage: GRAIN_BG, backgroundSize: "300px 300px" }}
+        />
       </div>
 
       <HeroSupportBadge phone={customerCareNumber} whatsapp={customerCareWhatsapp} />
@@ -273,7 +280,7 @@ export default function Hero({
           transition={{ delay: 0.5, duration: 0.9, ease }}
           className="relative hidden w-full md:block"
         >
-          <ProductStack products={spotlightList} onChangeIndex={setActiveIndex} />
+          <ProductStack products={spotlightList} onChangeIndex={noop} />
 
           {spotlightCount > 0 && (
             <motion.div
@@ -297,7 +304,7 @@ export default function Hero({
           transition={{ delay: 0.5, duration: 0.9, ease }}
           className="relative w-full md:hidden"
         >
-          <ProductStack products={spotlightList} onChangeIndex={setActiveIndex} />
+          <ProductStack products={spotlightList} onChangeIndex={noop} />
         </motion.div>
       </div>
     </section>

@@ -32,7 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // here rather than faked. Worth adding to the type + serverApi response
   // if you want more accurate crawl-freshness signals per product.
   const productRoutes: MetadataRoute.Sitemap = products.map((p) => ({
-    url: `${SITE_URL}/products/${p.slug}`,
+    url: `${SITE_URL}/product/${p.slug}`,
     changeFrequency: "weekly",
     priority: 0.7,
   }));

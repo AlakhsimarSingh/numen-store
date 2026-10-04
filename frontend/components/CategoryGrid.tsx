@@ -2,63 +2,20 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { fetchCategories, Category } from "@/src/lib/categories";
 import ProductCard from "@/components/ProductCard";
-import type { Product } from "@/src/types";
+import { useInterestStore } from "@/src/hooks/useInterestStore";
+import type { CategorySection } from "@/src/lib/home";
 
 const ease = [0.16, 1, 0.3, 1] as const;
 
-// Explicit, hand-picked browsing order: sneakers → formal shoes →
-// slippers → watches → perfumes → shades → ladies purse. Anything that
-// doesn't match one of these keys (added later) falls through to the end,
-// sorted by productCount so a new category doesn't need a code change to
-// appear sensibly. Matched against category.name (case-insensitive,
-// partial match) rather than slug, since slugs weren't available here —
-// swap to slug matching if you'd rather, it's more robust than name text.
-const CATEGORY_ORDER = [
-  "shoes",
-  "formal shoes",
-  "slippers",
-  "watches",
-  "perfumes & deos",
-  "shades",
-  "ladies purse",
-];
-
-function orderRank(category: Category): number {
-  const name = category.name.toLowerCase();
-  const idx = CATEGORY_ORDER.findIndex((key) => name.includes(key));
-  return idx === -1 ? CATEGORY_ORDER.length : idx;
-}
-
-interface CategoryGridProps {
-  products: Product[];
-}
-
-export default function CategoryGrid({ products }: CategoryGridProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    fetchCategories().then(setCategories).catch(() => {});
-  }, []);
-
-  const sortedCategories = [...categories].sort((a, b) => {
-    const rankDiff = orderRank(a) - orderRank(b);
-    if (rankDiff !== 0) return rankDiff;
-    return b.productCount - a.productCount;
-  });
-
-  // Only show a category section if it actually has products to display —
-  // an empty "View all" section with no cards underneath reads as broken.
-  const categorySections = sortedCategories
-    .map((category) => ({
-      category,
-      categoryProducts: products.filter((p) => p.categorySlug === category.slug).slice(0, 4),
-    }))
-    .filter(({ categoryProducts }) => categoryProducts.length > 0);
-
-  if (categorySections.length === 0) return null;
+/**
+ * Categories are now fetched, sorted and filtered on the server and arrive as
+ * props, so this section is part of the initial HTML. Before, it fetched
+ * /categories in a useEffect after hydration and popped in late (shifting the
+ * whole page while the user was already scrolling).
+ */
+export default function CategoryGrid({ sections }: { sections: CategorySection[] }) {
+  if (sections.length === 0) return null;
 
   return (
     <section className="mx-auto max-w-7xl px-6 py-16">
@@ -74,7 +31,7 @@ export default function CategoryGrid({ products }: CategoryGridProps) {
       </motion.div>
 
       <div className="space-y-14">
-        {categorySections.map(({ category, categoryProducts }, sectionIndex) => (
+        {sections.map(({ category, products }, sectionIndex) => (
           <motion.div
             key={category.slug}
             initial={{ opacity: 0, y: 20 }}
@@ -91,6 +48,7 @@ export default function CategoryGrid({ products }: CategoryGridProps) {
               </div>
               <Link
                 href={`/shop/${category.slug}`}
+                onClick={() => useInterestStore.getState().track(category.slug, "category")}
                 className="shrink-0 font-body text-xs font-semibold text-accent hover:underline"
               >
                 View all
@@ -98,7 +56,7 @@ export default function CategoryGrid({ products }: CategoryGridProps) {
             </div>
 
             <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-              {categoryProducts.map((product) => (
+              {products.map((product) => (
                 <ProductCard key={product.id} product={product} />
               ))}
             </div>

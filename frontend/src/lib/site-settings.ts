@@ -1,3 +1,5 @@
+import { CACHE_TAGS } from "@/src/data/cacheTags";
+
 export interface SiteSettingsDTO {
   siteName: string;
   tagline: string;
@@ -59,11 +61,17 @@ export async function updateSiteSettings(updates: Partial<SiteSettingsDTO>): Pro
  * "/api/site-settings", because a relative fetch() from server-side code is a
  * real outbound network call — it does NOT go through next.config.ts rewrites,
  * which only apply to requests arriving from the browser.
+ *
+ * Cached and refreshed in the background (was `no-store`, which made every
+ * page view wait on this request). Tagged so /api/revalidate can refresh it
+ * immediately after an admin edit.
  */
 export async function fetchSiteSettingsForServer(): Promise<SiteSettingsDTO> {
   const backendUrl = process.env.BACKEND_URL ?? "http://localhost:4000";
   try {
-    const res = await fetch(`${backendUrl}/api/site-settings`, { cache: "no-store" });
+    const res = await fetch(`${backendUrl}/api/site-settings`, {
+      next: { revalidate: 60, tags: [CACHE_TAGS.siteSettings] },
+    });
     if (!res.ok) return DEFAULT_SETTINGS;
     return await res.json();
   } catch {

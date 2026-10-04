@@ -11,6 +11,7 @@ import { useCartStore } from "@/src/hooks/useCartStore";
 import { useWishlistStore } from "@/src/hooks/useWishlistStore";
 import { useToastStore } from "@/src/hooks/useToastStore";
 import { useProductPrice } from "@/src/hooks/useProductPrice";
+import { useInterestStore } from "@/src/hooks/useInterestStore";
 
 export default function ProductCard({ product }: { product: Product }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -58,7 +59,11 @@ export default function ProductCard({ product }: { product: Product }) {
       style={{ rotateX, rotateY, transformPerspective: 800 }}
       className="group relative rounded-2xl border border-white/5 bg-surface p-3"
     >
-      <Link href={`/product/${product.slug}`} className="block">
+      <Link
+        href={`/product/${product.slug}`}
+        className="block"
+        onClick={() => useInterestStore.getState().track(product.categorySlug, "click", product.id)}
+      >
         <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-surface2">
           <Image
             src={product.image}
@@ -99,7 +104,7 @@ export default function ProductCard({ product }: { product: Product }) {
           <button
             onClick={(e) => {
               e.preventDefault();
-              toggleWishlist(product.id);
+              toggleWishlist(product.id, product.categorySlug);
               showToast(wishlisted ? "Removed from wishlist" : "Added to wishlist", wishlisted ? "info" : "success");
             }}
             aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
